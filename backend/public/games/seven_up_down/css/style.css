@@ -30,7 +30,7 @@ body, html {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 118px 12px 14px 12px;
+  padding: 140px 12px 14px 12px;
   position: relative;
 }
 
@@ -819,7 +819,7 @@ body, html {
    ========================================================================== */
 .top-header-bar {
   position: absolute;
-  top: 28px;
+  top: 50px;
   left: 12px;
   right: 12px;
   display: flex;
