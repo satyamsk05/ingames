@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../storage/token_manager.dart';
+import '../../services/api_service.dart';
 
 class ApiException implements Exception {
   final String code;
@@ -18,10 +19,7 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  static String serverBaseUrl = const String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://localhost:5050/api',
-  );
+  static String get serverBaseUrl => ApiService.baseUrl;
 
   static Map<String, String> get _headers {
     final headers = <String, String>{
