@@ -10,6 +10,7 @@ import { HistoryPanel } from './ui/HistoryPanel.js';
 import { PlayersPanel } from './ui/PlayersPanel.js';
 import { Popup } from './ui/Popup.js';
 import { soundManager } from './core/SoundManager.js';
+import { gameState } from './game/GameState.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   // Page visibility & blur listeners to mute audio immediately when app/tab goes to background
