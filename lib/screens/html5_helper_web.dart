@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui_web' as ui_web;
 import 'package:flutter/widgets.dart';
 import 'package:web/web.dart' as web;
@@ -20,8 +21,8 @@ Widget buildPlatformIframe(String viewId) {
   return HtmlElementView(viewType: viewId);
 }
 
-void setupWebMessageListener(void Function(String message) onMessage) {
-  web.window.onMessage.listen((event) {
+StreamSubscription? setupWebMessageListener(void Function(String message) onMessage) {
+  return web.window.onMessage.listen((event) {
     onMessage(event.data.toString());
   });
 }

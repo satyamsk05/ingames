@@ -40,6 +40,8 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
   bool _hasWebError = false;
   WebViewController? _webViewController;
 
+  StreamSubscription? _msgSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -56,7 +58,7 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
 
     if (kIsWeb) {
       registerIframeViewFactory(_viewId, formattedUrl);
-      setupWebMessageListener((msgStr) async {
+      _msgSubscription = setupWebMessageListener((msgStr) async {
         if (mounted) {
           try {
             final dynamic json = jsonDecode(msgStr);
@@ -66,7 +68,7 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
               final int version = (json['version'] as num?)?.toInt() ?? 1;
               final String type = json['type']?.toString() ?? '';
 
-              if ((source == 'ingames-game' || source.isEmpty) && version >= 1) {
+              if (source == 'ingames-game' && version >= 1) {
                 if (type == 'EXIT_GAME' || type == 'EXIT_MATCH') {
                   _exitGame();
                 } else if (type == 'WALLET_UPDATED' || type == 'ROUND_RESULT') {
@@ -104,6 +106,12 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _msgSubscription?.cancel();
+    super.dispose();
+  }
+
   Future<void> _initializeGameAndDeductFee() async {
     try {
       await _refreshProfileBalance();
@@ -128,7 +136,13 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
   }
 
   void _exitGame() {
-    widget.onBackPressed();
+    if (!mounted) return;
+    _msgSubscription?.cancel();
+    Future.microtask(() {
+      if (mounted) {
+        widget.onBackPressed();
+      }
+    });
   }
 
   @override
