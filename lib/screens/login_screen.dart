@@ -328,7 +328,9 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = e is ApiException ? e.message : 'Google authentication failed. Please check network connection.';
+        _errorMessage = e is ApiException
+            ? e.message
+            : 'Google Login requires Google OAuth Client & google-services.json setup. Please use Mobile OTP or Skip to App.';
       });
     }
   }
