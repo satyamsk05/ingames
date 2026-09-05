@@ -303,10 +303,10 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final response = await AuthApi.loginWithGoogle(
-        email: 'satyam.gamer@gmail.com',
-        name: 'Satyam Kumar',
-        googleId: 'g_satyam_1001',
+      final response = await AuthApi.loginWithAuth0(
+        email: 'player.auth0@ingames.app',
+        name: 'Google Auth0 Player',
+        sub: 'google-oauth2|1092837465019',
         picture: 'assets/avatar/avatar_1.png',
       );
 
@@ -320,18 +320,20 @@ class _LoginScreenState extends State<LoginScreen> {
         phone: user['phone']?.toString(),
       );
 
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
 
       widget.onLoginSuccess(response);
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = e is ApiException
-            ? e.message
-            : 'Google Login requires Google OAuth Client & google-services.json setup. Please use Mobile OTP or Skip to App.';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e is ApiException ? e.message : 'Auth0 Google authentication failed. Check network connection.';
+        });
+      }
     }
   }
 

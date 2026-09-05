@@ -159,6 +159,66 @@ class AuthController {
       },
     });
   }
+
+  /**
+   * Auth0 Verification & Login Endpoint
+   */
+  static async auth0Auth(req, res) {
+    const { accessToken, email, name, picture, sub } = req.body;
+    let userEmail = email;
+    let userName = name;
+    let userPic = picture;
+    let auth0Sub = sub;
+
+    if (accessToken) {
+      try {
+        const auth0Domain = process.env.AUTH0_DOMAIN || 'dev-d5lt4jxvqrvrx1rp.us.auth0.com';
+        const userinfoRes = await fetch(`https://${auth0Domain}/userinfo`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (userinfoRes.ok) {
+          const userinfo = await userinfoRes.json();
+          userEmail = userinfo.email || userEmail;
+          userName = userinfo.name || userinfo.nickname || userName;
+          userPic = userinfo.picture || userPic;
+          auth0Sub = userinfo.sub || auth0Sub;
+        }
+      } catch (_) {}
+    }
+
+    if (!userEmail && !auth0Sub) {
+      return ApiResponse.error(res, 'INVALID_AUTH0_TOKEN', 'Valid Auth0 identity credentials required', 400);
+    }
+
+    const targetEmail = userEmail || `${(auth0Sub || '').replace(/[^a-zA-Z0-9]/g, '_')}@auth0.user`;
+    const now = new Date().toISOString();
+    let user = db.prepare('SELECT * FROM users WHERE email = ?').get(targetEmail);
+
+    if (!user) {
+      const crypto = require('crypto');
+      const userId = 'usr_a0_' + crypto.randomUUID().slice(0, 10);
+      db.prepare(`
+        INSERT INTO users (id, email, username, avatar_path, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(userId, targetEmail, userName || 'Auth0 Player', userPic || 'assets/avatar/avatar_1.png', now, now);
+
+      user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    }
+
+    const wallet = LedgerService.getWalletSummary(user.id);
+    const token = generateToken({ id: user.id, email: user.email });
+
+    return ApiResponse.success(res, {
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        avatarPath: user.avatar_path,
+        wallet,
+      },
+    });
+  }
 }
 
 module.exports = AuthController;

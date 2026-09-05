@@ -35,4 +35,21 @@ class AuthApi {
     final res = await ApiClient.post('/auth/guest', {});
     return res as Map<String, dynamic>;
   }
+
+  static Future<Map<String, dynamic>> loginWithAuth0({
+    String? accessToken,
+    String? email,
+    String? name,
+    String? picture,
+    String? sub,
+  }) async {
+    final res = await ApiClient.post('/auth/auth0', {
+      'accessToken': accessToken,
+      'email': email,
+      'name': name,
+      'picture': picture,
+      'sub': sub,
+    });
+    return res as Map<String, dynamic>;
+  }
 }

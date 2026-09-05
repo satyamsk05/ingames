@@ -11,6 +11,7 @@ router.post('/auth/send-otp', AuthController.sendOtp);
 router.post('/auth/verify-otp', AuthController.verifyOtp);
 router.post('/auth/google', AuthController.googleAuth);
 router.post('/auth/guest', AuthController.guestAuth);
+router.post('/auth/auth0', AuthController.auth0Auth);
 
 // --- User Profile & Wallet Routes (Strict Auth Required) ---
 router.get('/user/profile', authMiddleware, WalletController.getProfileAndWallet);
