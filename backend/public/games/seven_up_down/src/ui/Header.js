@@ -3,6 +3,7 @@ import { soundManager } from '../core/SoundManager.js';
 export class Header {
   constructor() {
     this.bindEvents();
+    this.startPingMonitor();
   }
 
   bindEvents() {
@@ -72,5 +73,40 @@ export class Header {
         window.history.back();
       });
     }
+  }
+
+  startPingMonitor() {
+    const pingPill = document.getElementById('headerPingPill');
+    const pingText = document.getElementById('pingValText');
+
+    const updatePing = async () => {
+      const startTime = performance.now();
+      try {
+        await fetch('/health', { cache: 'no-store' });
+        const latency = Math.round(performance.now() - startTime);
+        if (pingText) pingText.textContent = `${latency}ms`;
+        if (pingPill) {
+          if (latency < 120) {
+            pingPill.style.color = '#00E676';
+            pingPill.style.borderColor = '#00E676';
+          } else if (latency < 280) {
+            pingPill.style.color = '#FFB74D';
+            pingPill.style.borderColor = '#FFB74D';
+          } else {
+            pingPill.style.color = '#EF4444';
+            pingPill.style.borderColor = '#EF4444';
+          }
+        }
+      } catch (_) {
+        if (pingText) pingText.textContent = '999ms';
+        if (pingPill) {
+          pingPill.style.color = '#EF4444';
+          pingPill.style.borderColor = '#EF4444';
+        }
+      }
+    };
+
+    updatePing();
+    setInterval(updatePing, 3000);
   }
 }
