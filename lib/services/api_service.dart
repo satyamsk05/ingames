@@ -4,13 +4,14 @@ import 'package:http/http.dart' as http;
 class ApiService {
   static String serverDomain = const String.fromEnvironment(
     'SERVER_DOMAIN',
-    defaultValue: 'https://ingame-x545.onrender.com',
+    defaultValue: 'https://ingames.onrender.com',
   );
 
   static String get baseUrl => '$serverDomain/api';
 
   static List<String> get _candidateBaseUrls => [
         '$serverDomain/api',
+        'https://ingame-x545.onrender.com/api',
         'http://localhost:5050/api',
         'http://127.0.0.1:5050/api',
         'http://10.0.2.2:5050/api',
