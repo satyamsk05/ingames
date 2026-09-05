@@ -30,7 +30,7 @@ body, html {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 140px 12px 14px 12px;
+  padding: 90px 12px 14px 12px;
   position: relative;
 }
 
