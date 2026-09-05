@@ -1,4 +1,6 @@
-# Miscellaneous
+auth0.exe
+auth0-cli.zip
+.config/auth0/
 *.class
 *.log
 *.pyc
