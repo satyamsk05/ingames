@@ -30,9 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
     soundManager.resume();
   });
 
-  window.addEventListener('pagehide', () => {
-    soundManager.stopAll();
-  });
+  // Register unlock audio listener on user tap/click
+  const unlockEvents = ['pointerdown', 'touchstart', 'click', 'keydown'];
+  const unlockHandler = () => {
+    soundManager.unlockAudio();
+  };
+  unlockEvents.forEach(evt => window.addEventListener(evt, unlockHandler));
   // Initialize Core Game Engine
   const game = new Game();
   game.init();

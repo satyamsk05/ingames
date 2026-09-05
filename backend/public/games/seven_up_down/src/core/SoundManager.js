@@ -13,6 +13,20 @@ class SoundManager {
         this.ctx = new AudioCtx();
       }
     }
+    if (this.ctx && this.ctx.state === 'suspended' && this.enabled) {
+      try {
+        this.ctx.resume();
+      } catch (_) {}
+    }
+  }
+
+  unlockAudio() {
+    this.initContext();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      try {
+        this.ctx.resume();
+      } catch (_) {}
+    }
   }
 
   toggle() {
