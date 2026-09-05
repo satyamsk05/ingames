@@ -12,7 +12,6 @@ class ApiService {
   static List<String> get _candidateBaseUrls => [
         '$serverDomain/api',
         'https://ingames.onrender.com/api',
-        'https://ingame-x545.onrender.com/api',
       ];
 
   // 0a. Send OTP via SMS or WhatsApp
