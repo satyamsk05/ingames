@@ -13,14 +13,20 @@ export class HistoryPanel {
   }
 
   render(historyList) {
-    if (!this.ribbonEl) return;
+    if (!this.ribbonEl || !Array.isArray(historyList)) return;
     this.ribbonEl.innerHTML = '';
-    historyList.forEach(total => {
+    historyList.forEach(item => {
+      const total = typeof item === 'number'
+        ? item
+        : (item?.sum ?? item?.total ?? parseInt(item, 10));
+
+      if (!total || isNaN(total) || total < 2 || total > 12) return;
+
       const badge = document.createElement('div');
       badge.className = 'badge-num ';
-      if (total >= 2 && total <= 6) badge.className += 'badge-green';
+      if (total >= 2 && total <= 6) badge.className += 'badge-red';
       else if (total === 7) badge.className += 'badge-blue';
-      else badge.className += 'badge-red';
+      else badge.className += 'badge-green';
       badge.innerText = total;
 
       this.ribbonEl.appendChild(badge);

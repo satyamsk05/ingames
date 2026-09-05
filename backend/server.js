@@ -24,7 +24,11 @@ const io = new Server(server, {
   cors: {
     origin: allowedOrigin,
     methods: ['GET', 'POST'],
+    credentials: true,
   },
+  transports: ['websocket', 'polling'],
+  pingTimeout: 30000,
+  pingInterval: 25000,
 });
 
 const PORT = process.env.PORT || 5050;
@@ -77,6 +81,23 @@ io.on('connection', (socket) => {
   console.log(`🎮 Client Connected: ${socket.id}`);
   socket.join(`user_${socket.user.id}`);
 
+  // Send current active round to newly connected socket
+  try {
+    const currentRound = SevenUpDownService.getCurrentRound();
+    if (currentRound) {
+      const closeAt = new Date(currentRound.betting_close_at).getTime();
+      const timeRemainingSeconds = Math.max(0, Math.floor((closeAt - Date.now()) / 1000));
+      socket.emit('ROUND_CREATED', {
+        roundId: currentRound.id,
+        roundNumber: currentRound.round_number,
+        seedHash: currentRound.seed_hash,
+        fairnessVersion: 1,
+        bettingCloseAt: currentRound.betting_close_at,
+        timeRemainingSeconds,
+      });
+    }
+  } catch (_) {}
+
   socket.on('disconnect', () => {
     console.log(`🔌 Client Disconnected: ${socket.id}`);
   });
@@ -93,6 +114,6 @@ app.use((err, req, res, next) => {
   return ApiResponse.error(res, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred', 500);
 });
 
-server.listen(PORT, () => {
-  console.log(`🚀 InGames Server running on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 InGames Backend Server listening on 0.0.0.0:${PORT}`);
 });

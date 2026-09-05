@@ -120,12 +120,12 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _onKeyPress(String val) {
-    if (_enteredOtp.length < 4) {
+    if (_enteredOtp.length < 6) {
       setState(() {
         _enteredOtp += val;
         _errorMessage = null;
       });
-      if (_enteredOtp.length == 4) {
+      if (_enteredOtp.length == 6) {
         _handleVerifyOtp(_enteredOtp);
       }
     }
@@ -199,30 +199,13 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
       widget.onLoginSuccess(res);
-    } catch (_) {
-      const guestToken = 'jwt_guest_offline';
-      await TokenManager.saveSession(
-        token: guestToken,
-        userId: 'usr_guest',
-        username: 'Guest Player',
-        phone: '',
-      );
+    } catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _errorMessage = e is ApiException ? e.message : 'Guest login failed. Please connect to the backend server.';
         });
       }
-      widget.onLoginSuccess({
-        'status': 'success',
-        'token': guestToken,
-        'data': {
-          'id': 'usr_guest',
-          'username': 'Guest Player',
-          'depositBalance': 0.0,
-          'winningsBalance': 0.0,
-          'totalBalance': 0.0,
-        }
-      });
     }
   }
 
@@ -573,7 +556,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           // Subtitle
           Text(
-            'We will send a 4-digit code to verify your account',
+            'We will send a 6-digit code to verify your account',
             style: GoogleFonts.poppins(
               color: Colors.white60,
               fontSize: 14,
@@ -757,22 +740,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 36),
 
-                // 4 Rounded Square PIN Boxes
+                // 6 Rounded Square PIN Boxes
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(4, (index) {
+                  children: List.generate(6, (index) {
                     final hasChar = index < _enteredOtp.length;
                     final char = hasChar ? _enteredOtp[index] : '';
 
                     return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      width: 58,
-                      height: 58,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: 46,
+                      height: 52,
                       decoration: BoxDecoration(
                         color: hasChar
                             ? const Color(0xFF283648)
                             : const Color(0xFF1E2836),
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: hasChar
                               ? const Color(0xFF00D2B6)
@@ -785,7 +768,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           char,
                           style: GoogleFonts.poppins(
                             color: Colors.white,
-                            fontSize: 24,
+                            fontSize: 22,
                             fontWeight: FontWeight.bold,
                           ),
                         ),

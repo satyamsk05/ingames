@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 
 import 'package:webview_flutter/webview_flutter.dart';
 import '../features/wallet/data/wallet_api.dart';
@@ -39,6 +40,8 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
   bool _isLoading = true;
   bool _isMatchFinished = false;
   bool _hasWebError = false;
+  int _latencyMs = 28;
+  Timer? _pingTimer;
   WebViewController? _webViewController;
 
   @override
@@ -46,6 +49,7 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
     super.initState();
 
     _initializeGameAndDeductFee();
+    _startPingTimer();
 
     final token = TokenManager.token ?? '';
     final fullUrl = widget.gameUrl.startsWith('http')
@@ -93,8 +97,9 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
                 });
               }
             },
-            onWebResourceError: (_) {
-              if (mounted) {
+            onWebResourceError: (WebResourceError error) {
+              final isMainFrame = error.isForMainFrame ?? true;
+              if (mounted && isMainFrame) {
                 setState(() {
                   _hasWebError = true;
                   _isLoading = false;
@@ -105,6 +110,37 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
         )
         ..loadRequest(Uri.parse(formattedUrl));
     }
+  }
+
+  @override
+  void dispose() {
+    _pingTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startPingTimer() {
+    _pingTimer?.cancel();
+    _pingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      if (!mounted) return;
+      final sw = Stopwatch()..start();
+      try {
+        final uri = Uri.parse('${ApiService.serverDomain}/api/health');
+        await http.get(uri).timeout(const Duration(seconds: 3));
+        sw.stop();
+        if (mounted) {
+          setState(() {
+            _latencyMs = sw.elapsedMilliseconds;
+          });
+        }
+      } catch (_) {
+        sw.stop();
+        if (mounted) {
+          setState(() {
+            _latencyMs = 999;
+          });
+        }
+      }
+    });
   }
 
   Future<void> _initializeGameAndDeductFee() async {
@@ -356,257 +392,215 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
     );
 
     return Scaffold(
-      backgroundColor: is7UpDown ? const Color(0xFF100334) : const Color(0xFF12021A),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: is7UpDown
-              ? const RadialGradient(
-                  center: Alignment(0.0, -0.6),
-                  radius: 1.4,
-                  colors: [
-                    Color(0xFF5D25B5),
-                    Color(0xFF2E0D6C),
-                    Color(0xFF100334),
-                  ],
-                  stops: [0.0, 0.6, 1.0],
-                )
-              : null,
-          color: is7UpDown ? null : const Color(0xFF12021A),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Top Header Bar (Circular Back Button, Game-aware Timer & Pot)
-              if (!_isMatchFinished)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  color: Colors.transparent,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Left: Fully Circular 3D Back Button & Label
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        InkWell(
-                          onTap: _showSettingsBottomSheet,
-                          borderRadius: BorderRadius.circular(22),
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Color(0xFF8B5CF6),
-                                  Color(0xFF5B21B6),
-                                ],
-                              ),
-                              border: Border.all(
-                                color: const Color(0xFFA78BFA).withValues(alpha: 0.7),
-                                width: 2,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.purple.shade900.withValues(alpha: 0.6),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 3),
+      backgroundColor: const Color(0xFF20084B),
+      body: Stack(
+        children: [
+          // 1. Full-screen HTML5 Game Canvas (Fills entire screen from top to bottom)
+          Positioned.fill(
+            child: _hasWebError
+                ? NetworkErrorWidget(
+                    customTitle: "Couldn't Load",
+                    customMessage: 'There was a problem trying to load the screen',
+                    onRetry: () {
+                      setState(() {
+                        _hasWebError = false;
+                        _isLoading = true;
+                      });
+                      _webViewController?.reload();
+                    },
+                  )
+                : (kIsWeb
+                    ? buildPlatformIframe(_viewId)
+                    : (_webViewController != null
+                        ? WebViewWidget(controller: _webViewController!)
+                        : Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.sports_esports_rounded, size: 72, color: Color(0xFF00E676)),
+                                const SizedBox(height: 16),
+                                Text(
+                                  '${widget.gameTitle} (HTML5 Engine)',
+                                  style: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Entry Fee: ₹${widget.entryFee.toStringAsFixed(0)} | Prize: ₹${widget.prizePool.toStringAsFixed(0)}',
+                                  style: GoogleFonts.poppins(color: Colors.white70, fontSize: 14),
                                 ),
                               ],
                             ),
-                            child: const Icon(
-                              Icons.settings_rounded,
-                              color: Colors.white,
-                              size: 19,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Settings',
-                          style: GoogleFonts.poppins(
-                            color: Colors.white70,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
+                          ))),
+          ),
 
-                    // Center: Stopwatch Timer Pill (Level with Back Button at top)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2E1065).withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(30),
-                        border: Border.all(
-                          color: const Color(0xFF7C3AED).withValues(alpha: 0.8),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF6D28D9).withValues(alpha: 0.35),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.timer_outlined,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'LIVE 🟢',
-                            style: GoogleFonts.poppins(
-                              color: const Color(0xFF00E676),
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Right: Pot Label & Amount Pill (Hidden for 7 Up Down) + Ping Indicator
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (!is7UpDown)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text(
-                                'Pot',
-                                style: GoogleFonts.poppins(
-                                  color: Colors.white70,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 1),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3.5),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF2E1065).withValues(alpha: 0.9),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: const Color(0xFF7C3AED).withValues(alpha: 0.8),
-                                    width: 1.2,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.purple.shade900.withValues(alpha: 0.4),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
+          // 2. Floating Transparent Top Header Bar (Settings, LIVE, Ping)
+          if (!_isMatchFinished && !kIsWeb)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Left: Settings Button
+                      MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _showSettingsBottomSheet,
+                          child: Padding(
+                            padding: const EdgeInsets.all(4.0),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color(0xFF8B5CF6),
+                                        Color(0xFF5B21B6),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                child: Text(
-                                  '₹${widget.prizePool.toStringAsFixed(0)}',
-                                  style: GoogleFonts.poppins(
+                                    border: Border.all(
+                                      color: const Color(0xFFA78BFA).withValues(alpha: 0.7),
+                                      width: 2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.purple.shade900.withValues(alpha: 0.6),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.settings_rounded,
                                     color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
+                                    size: 20,
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 6),
-                            ],
-                          ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E1035),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: const Color(0xFF7C3AED).withValues(alpha: 0.5),
-                              width: 1,
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Settings',
+                                  style: GoogleFonts.poppins(
+                                    color: Colors.white70,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.wifi,
-                                color: Color(0xFF00E676),
-                                size: 13,
+                        ),
+                      ),
+
+                      // Center: LIVE Timer Pill
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2E1065).withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(
+                            color: const Color(0xFF7C3AED).withValues(alpha: 0.8),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF6D28D9).withValues(alpha: 0.35),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.timer_outlined,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'LIVE 🟢',
+                              style: GoogleFonts.poppins(
+                                color: const Color(0xFF00E676),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.8,
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '35ms',
-                                style: GoogleFonts.poppins(
-                                  color: const Color(0xFF00E676),
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Right: Ping Indicator
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E1035),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _latencyMs < 100
+                                ? const Color(0xFF00E676)
+                                : _latencyMs < 250
+                                    ? Colors.amber
+                                    : Colors.redAccent,
+                            width: 1,
                           ),
                         ),
-                      ],
-                    ),
-                  ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.wifi,
+                              color: _latencyMs < 100
+                                  ? const Color(0xFF00E676)
+                                  : _latencyMs < 250
+                                      ? Colors.amber
+                                      : Colors.redAccent,
+                              size: 13,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${_latencyMs}ms',
+                              style: GoogleFonts.poppins(
+                                color: _latencyMs < 100
+                                    ? const Color(0xFF00E676)
+                                    : _latencyMs < 250
+                                        ? Colors.amber
+                                        : Colors.redAccent,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-
-            // HTML5 Game Canvas (Expanded)
-            Expanded(
-              child: Stack(
-                children: [
-                  if (_hasWebError)
-                    NetworkErrorWidget(
-                      customTitle: "Couldn't Load",
-                      customMessage: 'There was a problem trying to load the screen',
-                      onRetry: () {
-                        setState(() {
-                          _hasWebError = false;
-                          _isLoading = true;
-                        });
-                        _webViewController?.reload();
-                      },
-                    )
-                  else if (kIsWeb)
-                    buildPlatformIframe(_viewId)
-                  else if (_webViewController != null)
-                    WebViewWidget(controller: _webViewController!)
-                  else
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.sports_esports_rounded, size: 72, color: Color(0xFF00E676)),
-                          const SizedBox(height: 16),
-                          Text(
-                            '${widget.gameTitle} (HTML5 Engine)',
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Entry Fee: ₹${widget.entryFee.toStringAsFixed(0)} | Prize: ₹${widget.prizePool.toStringAsFixed(0)}',
-                            style: GoogleFonts.poppins(color: Colors.white70, fontSize: 14),
-                          ),
-                        ],
-                      ),
-                    ),
+            ),
 
             // Match Loading Overlay
             if (_isLoading)
               Container(
-                color: is7UpDown ? const Color(0xFF0B0626) : const Color(0xFF12021A),
+                color: const Color(0xFF20084B),
                 child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -647,13 +641,8 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  ),
-),
+        ],
+      ),
     );
   }
 }

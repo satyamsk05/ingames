@@ -34,12 +34,10 @@ class ApiClient {
     }
   }
 
-  async joinGame(gameId, betType, entryFee) {
+  async getCurrentRound() {
     try {
-      const res = await fetch('/api/games/join', {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({ gameId, betType, entryFee })
+      const res = await fetch('/api/games/7updown/current-round', {
+        headers: this.getHeaders()
       });
       return await res.json();
     } catch (e) {
@@ -47,12 +45,18 @@ class ApiClient {
     }
   }
 
-  async claimWinnings({ score, prizeAmount, diceResult, gameTitle }) {
+  async placeBet({ roundId, betType, stakeAmount, idempotencyKey }) {
     try {
-      const res = await fetch('/api/games/claim-winnings', {
+      const res = await fetch('/api/games/join', {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify({ score, prizeAmount, diceResult, gameTitle })
+        body: JSON.stringify({
+          gameId: 'game_7_up_down',
+          roundId,
+          betType,
+          stakeAmount,
+          idempotencyKey: idempotencyKey || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `idemp_${Date.now()}_${Math.random()}`)
+        })
       });
       return await res.json();
     } catch (e) {

@@ -1,9 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
 
 import 'theme/app_colors.dart';
 import 'widgets/top_header.dart';
@@ -135,21 +136,17 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
     _networkPingTimer?.cancel();
     _networkPingTimer = Timer.periodic(const Duration(seconds: 8), (timer) async {
       if (!mounted || !_isLoggedIn) return;
+      if (kIsWeb) return;
       try {
-        final res = await http.get(Uri.parse('${ApiService.serverDomain}/api/health')).timeout(const Duration(seconds: 4));
-        if (res.statusCode == 200) {
+        final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 4));
+        if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
           if (_isOffline && mounted) {
             setState(() {
               _isOffline = false;
             });
             _fetchUserData();
           }
-        } else {
-          if (!_isOffline && mounted) {
-            setState(() {
-              _isOffline = true;
-            });
-          }
+          return;
         }
       } catch (_) {
         if (!_isOffline && mounted) {
@@ -162,7 +159,6 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
   }
 
   Future<void> _fetchUserData() async {
-    bool hasError = false;
     try {
       final profile = await WalletApi.getUserProfile();
       if (mounted) {
@@ -177,9 +173,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
           }
         });
       }
-    } catch (_) {
-      hasError = true;
-    }
+    } catch (_) {}
 
     try {
       final txRes = await WalletApi.getTransactions();
@@ -202,12 +196,6 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
         });
       }
     } catch (_) {}
-
-    if (mounted) {
-      setState(() {
-        _isOffline = hasError;
-      });
-    }
   }
 
   final List<TransactionItemData> _transactionsList = [];

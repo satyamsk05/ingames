@@ -17,8 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   game.init();
 
   // Initialize UI Components
-  const headerEl = document.getElementById('headerContainer');
-  if (headerEl) new Header(headerEl);
+  new Header();
 
   const balanceEl = document.getElementById('userBalanceText');
   if (balanceEl) new Balance(balanceEl);

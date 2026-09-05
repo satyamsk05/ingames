@@ -1,6 +1,7 @@
 const db = require('../../config/db');
 const ApiResponse = require('../../core/api_response');
 const LedgerService = require('./ledger.service');
+const PaymentProviderAdapter = require('./payment_provider.adapter');
 
 class WalletController {
   static async getProfileAndWallet(req, res) {
@@ -66,17 +67,24 @@ class WalletController {
   }
 
   static async depositWebhook(req, res) {
-    const { orderId, providerTxId, signature, webhookEventId } = req.body;
+    const { orderId, providerTxId, webhookEventId } = req.body || {};
     if (!orderId) return ApiResponse.error(res, 'MISSING_ORDER_ID', 'Deposit order ID required', 400);
 
-    // Signature verification (Simulated for test mode or verified in production)
-    const signatureVerified = Boolean(signature || req.headers['x-provider-signature'] || process.env.NODE_ENV !== 'production');
+    const signatureVerified = PaymentProviderAdapter.verifySignature({
+      rawBody: req.rawBody,
+      body: req.body,
+      headers: req.headers,
+    });
+
+    if (!signatureVerified) {
+      return ApiResponse.error(res, 'INVALID_WEBHOOK_SIGNATURE', 'Payment webhook signature verification failed', 401);
+    }
 
     try {
       const walletSummary = LedgerService.processDepositWebhook({
         orderId,
         providerTxId: providerTxId || 'tx_gtw_' + Date.now(),
-        signatureVerified,
+        signatureVerified: true,
         webhookEventId: webhookEventId || 'ev_' + Date.now(),
       });
 

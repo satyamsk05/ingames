@@ -3,12 +3,28 @@ import { diceManager } from './DiceManager.js';
 import { timerManager } from './TimerManager.js';
 import { resultManager } from './ResultManager.js';
 import { apiClient } from '../network/ApiClient.js';
-import { gameConfig } from '../config/gameConfig.js';
+import { eventBus } from '../core/EventBus.js';
 
 class GameEngine {
+  constructor() {
+    this.currentRoundId = null;
+  }
+
   init() {
     this.fetchUserProfile();
-    this.startRound();
+    this.syncCurrentRound();
+
+    eventBus.on('ROUND_CREATED', (round) => {
+      this.handleRoundCreated(round);
+    });
+
+    eventBus.on('BETTING_CLOSED', () => {
+      this.handleBettingClosed();
+    });
+
+    eventBus.on('ROUND_RESULT', (result) => {
+      this.handleRoundResult(result);
+    });
   }
 
   fetchUserProfile() {
@@ -28,49 +44,59 @@ class GameEngine {
       .catch(() => {});
   }
 
-  startRound() {
-    timerManager.startTimer(() => {
-      this.executeRoll();
-    });
+  syncCurrentRound() {
+    apiClient.getCurrentRound()
+      .then(res => {
+        if (res && res.data) {
+          this.handleRoundCreated(res.data);
+        }
+      })
+      .catch(() => {});
   }
 
-  executeRoll() {
+  handleRoundCreated(round) {
+    if (!round || !round.roundId) return;
+    this.currentRoundId = round.roundId;
+    gameState.isRolling = false;
+    gameState.resetRoundBets();
+
+    const timeRemaining = round.timeRemainingSeconds !== undefined ? round.timeRemainingSeconds : 15;
+    timerManager.startTimer(timeRemaining);
+  }
+
+  handleBettingClosed() {
     gameState.isRolling = true;
-    gameState.lastRoundBet = gameState.totalBet;
+    timerManager.stopTimer();
+    this.submitQueuedBets();
+  }
 
-    // Send single consolidated bet transaction for the entire round's total bet
-    if (gameState.totalBet > 0) {
-      const summaryParts = [];
-      if (gameState.bets.down > 0) summaryParts.push(`2-6 DOWN (₹${gameState.bets.down})`);
-      if (gameState.bets.seven > 0) summaryParts.push(`7 LUCKY (₹${gameState.bets.seven})`);
-      if (gameState.bets.up > 0) summaryParts.push(`8-12 UP (₹${gameState.bets.up})`);
-      for (const num in gameState.bets.specific) {
-        if (gameState.bets.specific[num] > 0) {
-          summaryParts.push(`NUM ${num} (₹${gameState.bets.specific[num]})`);
-        }
+  submitQueuedBets() {
+    if (!this.currentRoundId || gameState.totalBet <= 0) return;
+
+    const betPromises = [];
+    if (gameState.bets.down > 0) {
+      betPromises.push(apiClient.placeBet({ roundId: this.currentRoundId, betType: 'DOWN', stakeAmount: gameState.bets.down }));
+    }
+    if (gameState.bets.seven > 0) {
+      betPromises.push(apiClient.placeBet({ roundId: this.currentRoundId, betType: 'SEVEN', stakeAmount: gameState.bets.seven }));
+    }
+    if (gameState.bets.up > 0) {
+      betPromises.push(apiClient.placeBet({ roundId: this.currentRoundId, betType: 'UP', stakeAmount: gameState.bets.up }));
+    }
+    for (const num in gameState.bets.specific) {
+      if (gameState.bets.specific[num] > 0) {
+        betPromises.push(apiClient.placeBet({ roundId: this.currentRoundId, betType: num, stakeAmount: gameState.bets.specific[num] }));
       }
-
-      const betSummary = summaryParts.length > 0 ? summaryParts.join(', ') : `Total Bet (₹${gameState.totalBet})`;
-
-      apiClient.joinGame('7 Up Down', betSummary, gameState.totalBet)
-        .then(res => {
-          if (res && res.data && res.data.totalBalance !== undefined) {
-            gameState.setBalance(res.data.totalBalance);
-            apiClient.notifyParentWallet(res.data.totalBalance);
-          }
-        })
-        .catch(() => {});
     }
 
-    diceManager.rollDiceAnimation((result) => {
-      resultManager.processResult(result);
+    Promise.all(betPromises).catch(() => {});
+  }
 
-      // Reset for next round after 3 seconds
-      setTimeout(() => {
-        gameState.resetRoundBets();
-        gameState.isRolling = false;
-        this.startRound();
-      }, gameConfig.resetDelayMs);
+  handleRoundResult(result) {
+    gameState.isRolling = true;
+    timerManager.stopTimer();
+    diceManager.rollDiceAnimation(result, (diceResult) => {
+      resultManager.processResult(result);
     });
   }
 }

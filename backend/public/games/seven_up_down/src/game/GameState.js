@@ -34,30 +34,23 @@ class GameState {
     if (type === 'specific') return;
     this.bets[type] += amount;
     this.totalBet += amount;
-    this.userBalance -= amount;
     eventBus.emit('BETS_UPDATED', { bets: this.bets, totalBet: this.totalBet });
-    eventBus.emit('BALANCE_UPDATED', this.userBalance);
   }
 
   addSpecificBet(number, amount) {
     this.bets.specific[number] = (this.bets.specific[number] || 0) + amount;
     this.totalBet += amount;
-    this.userBalance -= amount;
     eventBus.emit('BETS_UPDATED', { bets: this.bets, totalBet: this.totalBet });
-    eventBus.emit('BALANCE_UPDATED', this.userBalance);
   }
 
   clearBets() {
-    this.userBalance += this.totalBet;
     this.bets = { down: 0, seven: 0, up: 0, specific: {} };
     this.totalBet = 0;
     eventBus.emit('BETS_UPDATED', { bets: this.bets, totalBet: this.totalBet });
-    eventBus.emit('BALANCE_UPDATED', this.userBalance);
   }
 
   doubleBets() {
-    if (this.totalBet === 0 || this.userBalance < this.totalBet) return false;
-    this.userBalance -= this.totalBet;
+    if (this.totalBet === 0 || this.userBalance < this.totalBet * 2) return false;
     this.bets.down *= 2;
     this.bets.seven *= 2;
     this.bets.up *= 2;
@@ -66,7 +59,6 @@ class GameState {
     }
     this.totalBet *= 2;
     eventBus.emit('BETS_UPDATED', { bets: this.bets, totalBet: this.totalBet });
-    eventBus.emit('BALANCE_UPDATED', this.userBalance);
     return true;
   }
 

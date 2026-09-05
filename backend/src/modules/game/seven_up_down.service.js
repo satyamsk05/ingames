@@ -28,7 +28,7 @@ class SevenUpDownService {
   }
 
   /**
-   * Get active/current game round
+   * Get active/current game round with automatic timer scheduling
    */
   static getCurrentRound() {
     const now = new Date().toISOString();
@@ -40,7 +40,21 @@ class SevenUpDownService {
 
     if (dbRound) {
       this.currentRound = dbRound;
+      const closeAt = new Date(dbRound.betting_close_at).getTime();
+      const remainingMs = closeAt - Date.now();
+      if (remainingMs > 0) {
+        clearTimeout(this.roundTimer);
+        this.roundTimer = setTimeout(() => this.closeBettingAndRoll(dbRound.id), remainingMs);
+      } else {
+        this.closeBettingAndRoll(dbRound.id);
+      }
     } else {
+      // Mark old stuck rounds as finished before creating a clean round
+      db.prepare(`
+        UPDATE game_rounds 
+        SET status = 'FINISHED' 
+        WHERE game_id = 'game_7_up_down' AND status IN ('BETTING_OPEN', 'BETTING_CLOSED', 'RESULT_GENERATED') AND betting_close_at <= ?
+      `).run(now);
       this.currentRound = this.createNewRound();
     }
     return this.currentRound;
@@ -123,21 +137,26 @@ class SevenUpDownService {
     const betId = 'bet_' + crypto.randomUUID().slice(0, 12);
     const betTitle = `7 Up Down : ${normalizedBetType}`;
 
-    // Deduct stake using ledger engine
-    const walletSummary = LedgerService.deductBetStake({
-      userId,
-      stakePaise: stakeAmountPaise,
-      referenceId: betId,
-      betTitle,
-      idempotencyKey,
+    const executePlaceBet = db.transaction(() => {
+      // Deduct stake using ledger engine (atomic)
+      const walletSummary = LedgerService.deductBetStake({
+        userId,
+        stakePaise: stakeAmountPaise,
+        referenceId: betId,
+        betTitle,
+        idempotencyKey,
+      });
+
+      db.prepare(`
+        INSERT INTO bets (id, user_id, game_id, round_id, bet_type, stake_amount_paise, status, payout_amount_paise, idempotency_key, created_at, updated_at)
+        VALUES (?, ?, 'game_7_up_down', ?, ?, ?, 'ACCEPTED', 0, ?, ?, ?)
+      `).run(betId, userId, roundId, normalizedBetType, stakeAmountPaise, idempotencyKey, now, now);
+
+      const bet = db.prepare('SELECT * FROM bets WHERE id = ?').get(betId);
+      return { walletSummary, bet };
     });
 
-    db.prepare(`
-      INSERT INTO bets (id, user_id, game_id, round_id, bet_type, stake_amount_paise, status, payout_amount_paise, idempotency_key, created_at, updated_at)
-      VALUES (?, ?, 'game_7_up_down', ?, ?, ?, 'ACCEPTED', 0, ?, ?, ?)
-    `).run(betId, userId, roundId, normalizedBetType, stakeAmountPaise, idempotencyKey, now, now);
-
-    const bet = db.prepare('SELECT * FROM bets WHERE id = ?').get(betId);
+    const { walletSummary, bet } = executePlaceBet();
 
     if (this.ioInstance) {
       this.ioInstance.to(`user_${userId}`).emit('WALLET_UPDATED', walletSummary);
@@ -211,75 +230,80 @@ class SevenUpDownService {
    * Settle bets for finished round idempotently
    */
   static settleRoundBets(roundId, sum, winningOutcome) {
-    const bets = db.prepare("SELECT * FROM bets WHERE round_id = ? AND status = 'ACCEPTED'").all(roundId);
+    try {
+      const bets = db.prepare("SELECT * FROM bets WHERE round_id = ? AND status = 'ACCEPTED'").all(roundId);
 
-    // Multipliers for number bets (2->26x, 3->12x, 4->8x, 5->6x, 6->5x, 8->5x, 9->6x, 10->8x, 11->12x, 12->26x)
-    const numberOddsMap = {
-      '2': 26, '3': 12, '4': 8, '5': 6, '6': 5,
-      '8': 5, '9': 6, '10': 8, '11': 12, '12': 26
-    };
+      // Multipliers for number bets (2->26x, 3->12x, 4->8x, 5->6x, 6->5x, 8->5x, 9->6x, 10->8x, 11->12x, 12->26x)
+      const numberOddsMap = {
+        '2': 26, '3': 12, '4': 8, '5': 6, '6': 5,
+        '8': 5, '9': 6, '10': 8, '11': 12, '12': 26
+      };
 
-    for (const bet of bets) {
-      let isWin = false;
-      let multiplier = 0;
+      for (const bet of bets) {
+        let isWin = false;
+        let multiplier = 0;
 
-      if (bet.bet_type === 'DOWN' && sum < 7) {
-        isWin = true;
-        multiplier = 2;
-      } else if (bet.bet_type === 'UP' && sum > 7) {
-        isWin = true;
-        multiplier = 2;
-      } else if (bet.bet_type === 'SEVEN' && sum === 7) {
-        isWin = true;
-        multiplier = 5;
-      } else if (bet.bet_type === String(sum) && numberOddsMap[String(sum)]) {
-        isWin = true;
-        multiplier = numberOddsMap[String(sum)];
+        if (bet.bet_type === 'DOWN' && sum < 7) {
+          isWin = true;
+          multiplier = 2;
+        } else if (bet.bet_type === 'UP' && sum > 7) {
+          isWin = true;
+          multiplier = 2;
+        } else if (bet.bet_type === 'SEVEN' && sum === 7) {
+          isWin = true;
+          multiplier = 5;
+        } else if (bet.bet_type === String(sum) && numberOddsMap[String(sum)]) {
+          isWin = true;
+          multiplier = numberOddsMap[String(sum)];
+        }
+
+        const now = new Date().toISOString();
+        if (isWin) {
+          const payoutPaise = bet.stake_amount_paise * multiplier;
+          db.prepare("UPDATE bets SET status = 'WON', payout_amount_paise = ?, updated_at = ? WHERE id = ?")
+            .run(payoutPaise, now, bet.id);
+
+          const wallet = LedgerService.creditBetWinnings({
+            userId: bet.user_id,
+            payoutPaise,
+            referenceId: roundId,
+            gameTitle: '7 Up Down',
+            diceResult: `Dice ${sum} (${winningOutcome})`,
+            betId: bet.id,
+          });
+
+          if (this.ioInstance) {
+            this.ioInstance.to(`user_${bet.user_id}`).emit('WALLET_UPDATED', wallet);
+            this.ioInstance.to(`user_${bet.user_id}`).emit('BET_SETTLED', {
+              betId: bet.id,
+              status: 'WON',
+              payout: payoutPaise / 100,
+              sum,
+            });
+          }
+        } else {
+          db.prepare("UPDATE bets SET status = 'LOST', updated_at = ? WHERE id = ?").run(now, bet.id);
+          if (this.ioInstance) {
+            this.ioInstance.to(`user_${bet.user_id}`).emit('BET_SETTLED', {
+              betId: bet.id,
+              status: 'LOST',
+              payout: 0,
+              sum,
+            });
+          }
+        }
       }
 
-      const now = new Date().toISOString();
-      if (isWin) {
-        const payoutPaise = bet.stake_amount_paise * multiplier;
-        db.prepare("UPDATE bets SET status = 'WON', payout_amount_paise = ?, updated_at = ? WHERE id = ?")
-          .run(payoutPaise, now, bet.id);
-
-        const wallet = LedgerService.creditBetWinnings({
-          userId: bet.user_id,
-          payoutPaise,
-          referenceId: roundId,
-          gameTitle: '7 Up Down',
-          diceResult: `Dice ${sum} (${winningOutcome})`,
-          betId: bet.id,
-        });
-
-        if (this.ioInstance) {
-          this.ioInstance.to(`user_${bet.user_id}`).emit('WALLET_UPDATED', wallet);
-          this.ioInstance.to(`user_${bet.user_id}`).emit('BET_SETTLED', {
-            betId: bet.id,
-            status: 'WON',
-            payout: payoutPaise / 100,
-            sum,
-          });
-        }
-      } else {
-        db.prepare("UPDATE bets SET status = 'LOST', updated_at = ? WHERE id = ?").run(now, bet.id);
-        if (this.ioInstance) {
-          this.ioInstance.to(`user_${bet.user_id}`).emit('BET_SETTLED', {
-            betId: bet.id,
-            status: 'LOST',
-            payout: 0,
-            sum,
-          });
-        }
-      }
+      db.prepare("UPDATE game_rounds SET status = 'FINISHED' WHERE id = ?").run(roundId);
+    } catch (err) {
+      console.error('💥 Error settling round bets:', err);
+    } finally {
+      // Start next round after 5 seconds unconditionally
+      clearTimeout(this.roundTimer);
+      this.roundTimer = setTimeout(() => {
+        this.createNewRound();
+      }, 5000);
     }
-
-    db.prepare("UPDATE game_rounds SET status = 'FINISHED' WHERE id = ?").run(roundId);
-
-    // Start next round after 5 seconds
-    setTimeout(() => {
-      this.createNewRound();
-    }, 5000);
   }
 }
 

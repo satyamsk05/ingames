@@ -6,7 +6,13 @@ import { GAME_ID } from '../config/constants.js';
 
 class ResultManager {
   processResult(result) {
-    const { total } = result;
+    if (!result) return;
+    const total = typeof result === 'number'
+      ? result
+      : (result.sum ?? result.total ?? ((result.dice1 || 0) + (result.dice2 || 0)));
+
+    if (!total || isNaN(total)) return;
+
     const bets = gameState.bets;
     let winAmt = 0;
 
@@ -19,7 +25,7 @@ class ResultManager {
     if (total >= 8 && total <= 12 && bets.up > 0) {
       winAmt += bets.up * 2;
     }
-    if (bets.specific[total]) {
+    if (bets.specific && bets.specific[total]) {
       winAmt += bets.specific[total] * 6;
     }
 
@@ -27,23 +33,7 @@ class ResultManager {
 
     if (winAmt > 0) {
       soundManager.playWin();
-      gameState.setBalance(gameState.userBalance + winAmt);
       eventBus.emit('WIN_OCCURRED', { winAmount: winAmt });
-
-      // Claim winnings to backend API
-      apiClient.claimWinnings({
-        score: total,
-        prizeAmount: winAmt,
-        diceResult: `Dice Roll: ${total}`,
-        gameTitle: GAME_ID
-      })
-      .then(res => {
-        if (res && res.data && res.data.totalBalance !== undefined) {
-          gameState.setBalance(res.data.totalBalance);
-          apiClient.notifyParentWallet(res.data.totalBalance);
-        }
-      })
-      .catch(() => {});
     }
   }
 }

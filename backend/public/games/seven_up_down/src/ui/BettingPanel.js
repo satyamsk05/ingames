@@ -1,12 +1,46 @@
 import { betManager } from '../game/BetManager.js';
 import { eventBus } from '../core/EventBus.js';
+import { gameState } from '../game/GameState.js';
 
 export class BettingPanel {
   constructor(mainBetsGridEl, numBetsWrapEl) {
     this.mainBetsGridEl = mainBetsGridEl;
     this.numBetsWrapEl = numBetsWrapEl;
+    this.tableTotalBet = 0;
+    this.tableInterval = null;
     this.bindEvents();
     this.listenState();
+  }
+
+  startTableBetSimulation() {
+    if (this.tableInterval) clearInterval(this.tableInterval);
+    this.tableTotalBet = Math.floor(Math.random() * 2500) + 1500;
+    this.updateTotalTableBetDisplay();
+
+    this.tableInterval = setInterval(() => {
+      if (this.tableTotalBet < 125000) {
+        const increment = Math.floor(Math.random() * 4500) + 1500;
+        this.tableTotalBet += increment;
+        this.updateTotalTableBetDisplay();
+      } else {
+        clearInterval(this.tableInterval);
+      }
+    }, 600);
+  }
+
+  stopTableBetSimulation() {
+    if (this.tableInterval) {
+      clearInterval(this.tableInterval);
+      this.tableInterval = null;
+    }
+  }
+
+  updateTotalTableBetDisplay() {
+    const totalTableBetVal = document.getElementById('totalTableBetVal');
+    if (totalTableBetVal) {
+      const combined = this.tableTotalBet + (gameState.totalBet || 0);
+      totalTableBetVal.innerText = `₹${combined.toLocaleString('en-IN')}.00`;
+    }
   }
 
   bindEvents() {
@@ -46,6 +80,14 @@ export class BettingPanel {
   }
 
   listenState() {
+    eventBus.on('ROUND_CREATED', () => {
+      this.startTableBetSimulation();
+    });
+
+    eventBus.on('BETTING_CLOSED', () => {
+      this.stopTableBetSimulation();
+    });
+
     eventBus.on('BETS_UPDATED', ({ bets, totalBet }) => {
       const badgeDown = document.getElementById('badgeDown');
       const badgeSeven = document.getElementById('badgeSeven');
@@ -53,6 +95,7 @@ export class BettingPanel {
       const yourBetText = document.getElementById('yourBetText');
 
       if (yourBetText) yourBetText.innerText = `₹${totalBet}`;
+      this.updateTotalTableBetDisplay();
 
       if (badgeDown) {
         if (bets.down > 0) {
