@@ -21,13 +21,16 @@ class AuthApi {
     required String name,
     required String googleId,
     String? picture,
+    String? idToken,
   }) async {
-    final res = await ApiClient.post('/auth/google', {
-      'email': email,
-      'name': name,
-      'googleId': googleId,
-      'picture': picture,
-    });
+    if (idToken == null || idToken.isEmpty) {
+      throw ApiException(
+        code: 'GOOGLE_ID_TOKEN_REQUIRED',
+        message: 'Google identity verification is not configured in this client',
+        statusCode: 401,
+      );
+    }
+    final res = await ApiClient.post('/auth/google', {'idToken': idToken});
     return res as Map<String, dynamic>;
   }
 
@@ -43,23 +46,14 @@ class AuthApi {
     String? picture,
     String? sub,
   }) async {
-    try {
-      final res = await ApiClient.post('/auth/auth0', {
-        'accessToken': accessToken,
-        'email': email,
-        'name': name,
-        'picture': picture,
-        'sub': sub,
-      });
-      return res as Map<String, dynamic>;
-    } catch (_) {
-      final res = await ApiClient.post('/auth/google', {
-        'email': email ?? 'player.auth0@ingames.app',
-        'name': name ?? 'Google Auth0 Player',
-        'googleId': sub ?? 'g_satyam_1001',
-        'picture': picture ?? 'assets/avatar/avatar_1.png',
-      });
-      return res as Map<String, dynamic>;
+    if (accessToken == null || accessToken.isEmpty) {
+      throw ApiException(
+        code: 'AUTH0_ACCESS_TOKEN_REQUIRED',
+        message: 'Auth0 access token required',
+        statusCode: 401,
+      );
     }
+    final res = await ApiClient.post('/auth/auth0', {'accessToken': accessToken});
+    return res as Map<String, dynamic>;
   }
 }
