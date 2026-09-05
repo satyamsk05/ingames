@@ -9,9 +9,29 @@ import { Timer } from './ui/Timer.js';
 import { HistoryPanel } from './ui/HistoryPanel.js';
 import { PlayersPanel } from './ui/PlayersPanel.js';
 import { Popup } from './ui/Popup.js';
-import { gameState } from './game/GameState.js';
+import { soundManager } from './core/SoundManager.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Page visibility & blur listeners to mute audio immediately when app/tab goes to background
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      soundManager.stopAll();
+    } else {
+      soundManager.resume();
+    }
+  });
+
+  window.addEventListener('blur', () => {
+    soundManager.stopAll();
+  });
+
+  window.addEventListener('focus', () => {
+    soundManager.resume();
+  });
+
+  window.addEventListener('pagehide', () => {
+    soundManager.stopAll();
+  });
   // Initialize Core Game Engine
   const game = new Game();
   game.init();

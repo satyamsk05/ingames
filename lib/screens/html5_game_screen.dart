@@ -34,7 +34,7 @@ class Html5GameScreen extends StatefulWidget {
   State<Html5GameScreen> createState() => _Html5GameScreenState();
 }
 
-class _Html5GameScreenState extends State<Html5GameScreen> {
+class _Html5GameScreenState extends State<Html5GameScreen> with WidgetsBindingObserver {
   final String _viewId = 'html5_game_iframe_${DateTime.now().millisecondsSinceEpoch}';
   bool _isLoading = true;
   bool _hasWebError = false;
@@ -45,6 +45,7 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     _initializeGameAndDeductFee();
 
@@ -108,8 +109,32 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _msgSubscription?.cancel();
+    if (!kIsWeb && _webViewController != null) {
+      try {
+        _webViewController?.runJavaScript("if (window.soundManager) window.soundManager.stopAll();");
+        _webViewController?.loadRequest(Uri.parse('about:blank'));
+      } catch (_) {}
+    }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive || state == AppLifecycleState.detached) {
+      if (!kIsWeb && _webViewController != null) {
+        try {
+          _webViewController?.runJavaScript("if (window.soundManager) window.soundManager.stopAll();");
+        } catch (_) {}
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (!kIsWeb && _webViewController != null) {
+        try {
+          _webViewController?.runJavaScript("if (window.soundManager) window.soundManager.resume();");
+        } catch (_) {}
+      }
+    }
   }
 
   Future<void> _initializeGameAndDeductFee() async {

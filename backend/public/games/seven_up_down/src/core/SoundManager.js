@@ -18,7 +18,32 @@ class SoundManager {
   toggle() {
     this.enabled = !this.enabled;
     setStoredSoundPreference(this.enabled);
+    if (!this.enabled) {
+      this.stopAll();
+    } else {
+      this.resume();
+    }
     return this.enabled;
+  }
+
+  stopAll() {
+    if (this.ctx && typeof this.ctx.suspend === 'function') {
+      try {
+        if (this.ctx.state === 'running') {
+          this.ctx.suspend();
+        }
+      } catch (_) {}
+    }
+  }
+
+  resume() {
+    if (this.ctx && this.enabled && typeof this.ctx.resume === 'function') {
+      try {
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      } catch (_) {}
+    }
   }
 
   playClick() {
@@ -147,3 +172,6 @@ class SoundManager {
 }
 
 export const soundManager = new SoundManager();
+if (typeof window !== 'undefined') {
+  window.soundManager = soundManager;
+}
