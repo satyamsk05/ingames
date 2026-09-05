@@ -1,7 +1,10 @@
 const jwt = require('jsonwebtoken');
 const ApiResponse = require('./api_response');
 
-const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? (() => { throw new Error('JWT_SECRET is required in production environment'); })() : 'super_secret_ingames_jwt_key_2026_production');
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET is required and must be at least 32 characters');
+}
 
 function generateToken(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
@@ -17,7 +20,11 @@ function authMiddleware(req, res, next) {
     return ApiResponse.error(res, 'UNAUTHORIZED', 'Authentication token required', 401);
   }
 
-  const token = authHeader.split(' ')[1];
+  const token = authHeader.slice('Bearer '.length).trim();
+  if (!token) {
+    return ApiResponse.error(res, 'INVALID_TOKEN', 'Invalid or expired token', 401);
+  }
+
   try {
     const decoded = verifyToken(token);
     if (!decoded || !decoded.id) {
@@ -33,10 +40,12 @@ function authMiddleware(req, res, next) {
 function optionalAuthMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1];
-    try {
-      req.user = verifyToken(token);
-    } catch (_) {}
+    const token = authHeader.slice('Bearer '.length).trim();
+    if (token) {
+      try {
+        req.user = verifyToken(token);
+      } catch (_) {}
+    }
   }
   next();
 }
