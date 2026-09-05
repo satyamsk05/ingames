@@ -30,4 +30,9 @@ class AuthApi {
     });
     return res as Map<String, dynamic>;
   }
+
+  static Future<Map<String, dynamic>> guestLogin() async {
+    final res = await ApiClient.post('/auth/guest', {});
+    return res as Map<String, dynamic>;
+  }
 }

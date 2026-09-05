@@ -131,6 +131,34 @@ class AuthController {
       },
     });
   }
+
+  /**
+   * Guest Login Endpoint
+   */
+  static async guestAuth(req, res) {
+    const crypto = require('crypto');
+    const guestId = 'usr_gst_' + crypto.randomUUID().slice(0, 10);
+    const now = new Date().toISOString();
+
+    db.prepare(`
+      INSERT INTO users (id, username, avatar_path, created_at, updated_at)
+      VALUES (?, ?, 'assets/avatar/avatar_1.png', ?, ?)
+    `).run(guestId, `Guest_${guestId.slice(-4)}`, now, now);
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(guestId);
+    const wallet = LedgerService.getWalletSummary(user.id);
+    const token = generateToken({ id: user.id });
+
+    return ApiResponse.success(res, {
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        avatarPath: user.avatar_path,
+        wallet,
+      },
+    });
+  }
 }
 
 module.exports = AuthController;

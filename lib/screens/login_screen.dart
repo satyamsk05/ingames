@@ -178,26 +178,52 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _handleSkipLogin() async {
-    const guestToken = 'jwt_guest_token';
-    await TokenManager.saveSession(
-      token: guestToken,
-      userId: 'usr_guest',
-      username: 'Guest Player',
-      phone: '',
-    );
-    widget.onLoginSuccess({
-      'status': 'success',
-      'token': guestToken,
-      'data': {
-        'id': 'usr_guest',
-        'username': 'Guest Player',
-        'phoneNumber': '',
-        'depositBalance': 0.0,
-        'winningsBalance': 0.0,
-        'rewardsBalance': 0.0,
-        'totalBalance': 0.0,
-      }
+    setState(() {
+      _isLoading = true;
     });
+    try {
+      final res = await AuthApi.guestLogin();
+      final token = res['token']?.toString() ?? '';
+      final user = res['user'] as Map<String, dynamic>? ?? {};
+
+      await TokenManager.saveSession(
+        token: token,
+        userId: user['id']?.toString() ?? '',
+        username: user['username']?.toString(),
+        phone: user['phone']?.toString(),
+      );
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+      widget.onLoginSuccess(res);
+    } catch (_) {
+      const guestToken = 'jwt_guest_offline';
+      await TokenManager.saveSession(
+        token: guestToken,
+        userId: 'usr_guest',
+        username: 'Guest Player',
+        phone: '',
+      );
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+      widget.onLoginSuccess({
+        'status': 'success',
+        'token': guestToken,
+        'data': {
+          'id': 'usr_guest',
+          'username': 'Guest Player',
+          'depositBalance': 0.0,
+          'winningsBalance': 0.0,
+          'totalBalance': 0.0,
+        }
+      });
+    }
   }
 
   Widget _buildTopHeaderBar({VoidCallback? onBackTap}) {

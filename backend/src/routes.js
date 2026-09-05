@@ -10,6 +10,7 @@ const { authMiddleware } = require('./core/auth_middleware');
 router.post('/auth/send-otp', AuthController.sendOtp);
 router.post('/auth/verify-otp', AuthController.verifyOtp);
 router.post('/auth/google', AuthController.googleAuth);
+router.post('/auth/guest', AuthController.guestAuth);
 
 // --- User Profile & Wallet Routes (Strict Auth Required) ---
 router.get('/user/profile', authMiddleware, WalletController.getProfileAndWallet);
