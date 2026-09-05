@@ -33,6 +33,17 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Mount Central API Routes
 app.use('/api', apiRoutes);
 
+// Root Welcome / Health Route
+app.get('/', (req, res) => {
+  return ApiResponse.success(res, {
+    name: 'InGames Real Money Gaming Backend',
+    status: 'online',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV || 'development',
+  });
+});
+
 // Health Check
 app.get('/health', (req, res) => {
   return ApiResponse.success(res, {
