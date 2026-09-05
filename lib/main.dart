@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 
 import 'theme/app_colors.dart';
 import 'widgets/top_header.dart';
@@ -112,6 +114,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
   String _selectedGameUrl = '/games/seven_up_down/index.html';
   String _transactionsFilter = 'All';
   bool _isOffline = false;
+  Timer? _networkPingTimer;
 
   @override
   void initState() {
@@ -119,6 +122,43 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
     if (_isLoggedIn) {
       _fetchUserData();
     }
+    _startNetworkMonitoring();
+  }
+
+  @override
+  void dispose() {
+    _networkPingTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startNetworkMonitoring() {
+    _networkPingTimer?.cancel();
+    _networkPingTimer = Timer.periodic(const Duration(seconds: 8), (timer) async {
+      if (!mounted || !_isLoggedIn) return;
+      try {
+        final res = await http.get(Uri.parse('${ApiService.serverDomain}/api/health')).timeout(const Duration(seconds: 4));
+        if (res.statusCode == 200) {
+          if (_isOffline && mounted) {
+            setState(() {
+              _isOffline = false;
+            });
+            _fetchUserData();
+          }
+        } else {
+          if (!_isOffline && mounted) {
+            setState(() {
+              _isOffline = true;
+            });
+          }
+        }
+      } catch (_) {
+        if (!_isOffline && mounted) {
+          setState(() {
+            _isOffline = true;
+          });
+        }
+      }
+    });
   }
 
   Future<void> _fetchUserData() async {
