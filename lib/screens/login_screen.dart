@@ -22,8 +22,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   LoginStep _currentStep = LoginStep.selectMethod;
-  bool _isRegisterMode = true;
-  String _otpChannel = 'whatsapp'; // 'whatsapp' or 'sms'
+  final String _otpChannel = 'whatsapp'; // 'whatsapp' or 'sms'
 
   final TextEditingController _phoneController = TextEditingController();
   String _enteredOtp = '';
@@ -178,18 +177,25 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _handleSkipLogin() {
+  void _handleSkipLogin() async {
+    const guestToken = 'jwt_guest_token';
+    await TokenManager.saveSession(
+      token: guestToken,
+      userId: 'usr_guest',
+      username: 'Guest Player',
+      phone: '',
+    );
     widget.onLoginSuccess({
       'status': 'success',
-      'token': 'jwt_skip_guest_token',
+      'token': guestToken,
       'data': {
-        'id': 'usr_9981',
-        'username': 'Ashu K',
-        'phoneNumber': '+91727*****82',
-        'depositBalance': 800.0,
-        'winningsBalance': 450.0,
+        'id': 'usr_guest',
+        'username': 'Guest Player',
+        'phoneNumber': '',
+        'depositBalance': 0.0,
+        'winningsBalance': 0.0,
         'rewardsBalance': 0.0,
-        'totalBalance': 1250.0,
+        'totalBalance': 0.0,
       }
     });
   }

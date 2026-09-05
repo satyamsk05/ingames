@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../features/wallet/data/wallet_api.dart';
-import '../features/game/data/game_api.dart';
+import '../core/storage/token_manager.dart';
 import 'html5_helper.dart';
 
 class Html5GameScreen extends StatefulWidget {
@@ -43,7 +43,11 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
     _initializeGameAndDeductFee();
 
     if (kIsWeb) {
-      registerIframeViewFactory(_viewId, widget.gameUrl);
+      final token = TokenManager.token ?? '';
+      final formattedUrl = widget.gameUrl.contains('?')
+          ? '${widget.gameUrl}&token=${Uri.encodeComponent(token)}'
+          : '${widget.gameUrl}?token=${Uri.encodeComponent(token)}';
+      registerIframeViewFactory(_viewId, formattedUrl);
       setupWebMessageListener((msgStr) async {
         if (mounted) {
           try {
@@ -54,7 +58,7 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
               final int version = (json['version'] as num?)?.toInt() ?? 1;
               final String type = json['type']?.toString() ?? '';
 
-              if (source == 'ingames-game' || source.isEmpty) {
+              if ((source == 'ingames-game' || source.isEmpty) && version >= 1) {
                 if (type == 'EXIT_GAME' || type == 'EXIT_MATCH') {
                   _exitGame();
                 } else if (type == 'WALLET_UPDATED' || type == 'ROUND_RESULT') {

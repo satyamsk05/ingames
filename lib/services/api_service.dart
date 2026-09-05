@@ -98,18 +98,8 @@ class ApiService {
       } catch (_) {}
     }
     return {
-      'status': 'success',
-      'token': 'jwt_google_token_local',
-      'data': {
-        'id': 'usr_google_player',
-        'username': name,
-        'email': email,
-        'avatarPath': picture ?? 'assets/avatar/avatar_1.png',
-        'depositBalance': 800.0,
-        'winningsBalance': 450.0,
-        'rewardsBalance': 0.0,
-        'totalBalance': 1250.0,
-      }
+      'status': 'error',
+      'message': 'Cannot connect to backend server. Check server connection.',
     };
   }
 
