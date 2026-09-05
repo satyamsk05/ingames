@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:webview_flutter/webview_flutter.dart';
 import '../features/wallet/data/wallet_api.dart';
 import '../core/storage/token_manager.dart';
+import '../services/api_service.dart';
 import 'html5_helper.dart';
 
 class Html5GameScreen extends StatefulWidget {
@@ -35,6 +37,7 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
   final String _viewId = 'html5_game_iframe_${DateTime.now().millisecondsSinceEpoch}';
   bool _isLoading = true;
   bool _isMatchFinished = false;
+  WebViewController? _webViewController;
 
   @override
   void initState() {
@@ -42,11 +45,15 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
 
     _initializeGameAndDeductFee();
 
+    final token = TokenManager.token ?? '';
+    final fullUrl = widget.gameUrl.startsWith('http')
+        ? widget.gameUrl
+        : '${ApiService.serverDomain}${widget.gameUrl.startsWith('/') ? '' : '/'}${widget.gameUrl}';
+    final formattedUrl = fullUrl.contains('?')
+        ? '$fullUrl&token=${Uri.encodeComponent(token)}'
+        : '$fullUrl?token=${Uri.encodeComponent(token)}';
+
     if (kIsWeb) {
-      final token = TokenManager.token ?? '';
-      final formattedUrl = widget.gameUrl.contains('?')
-          ? '${widget.gameUrl}&token=${Uri.encodeComponent(token)}'
-          : '${widget.gameUrl}?token=${Uri.encodeComponent(token)}';
       registerIframeViewFactory(_viewId, formattedUrl);
       setupWebMessageListener((msgStr) async {
         if (mounted) {
@@ -72,6 +79,28 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
           } catch (_) {}
         }
       });
+    } else {
+      _webViewController = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageFinished: (_) {
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                });
+              }
+            },
+            onWebResourceError: (_) {
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                });
+              }
+            },
+          ),
+        )
+        ..loadRequest(Uri.parse(formattedUrl));
     }
   }
 
@@ -533,8 +562,9 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
                 children: [
                   if (kIsWeb)
                     buildPlatformIframe(_viewId)
+                  else if (_webViewController != null)
+                    WebViewWidget(controller: _webViewController!)
                   else
-                    // Non-web placeholder preview
                     Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
