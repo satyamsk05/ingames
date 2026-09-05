@@ -41,7 +41,12 @@ function initDb() {
       wallet_id TEXT NOT NULL,
       reference_type TEXT NOT NULL,
       reference_id TEXT NOT NULL,
+      idempotency_key TEXT,
       direction TEXT NOT NULL,
+      delta_cash_paise INTEGER DEFAULT 0,
+      delta_winnings_paise INTEGER DEFAULT 0,
+      delta_bonus_paise INTEGER DEFAULT 0,
+      delta_locked_paise INTEGER DEFAULT 0,
       amount_paise INTEGER NOT NULL,
       balance_before_paise INTEGER NOT NULL,
       balance_after_paise INTEGER NOT NULL,
@@ -51,14 +56,28 @@ function initDb() {
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (wallet_id) REFERENCES wallets(id)
     );
+  `);
 
-    CREATE TABLE IF NOT EXISTS deposits (
+  try { db.exec('ALTER TABLE wallet_ledger ADD COLUMN idempotency_key TEXT'); } catch (_) {}
+  try { db.exec('ALTER TABLE wallet_ledger ADD COLUMN delta_cash_paise INTEGER DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE wallet_ledger ADD COLUMN delta_winnings_paise INTEGER DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE wallet_ledger ADD COLUMN delta_bonus_paise INTEGER DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE wallet_ledger ADD COLUMN delta_locked_paise INTEGER DEFAULT 0'); } catch (_) {}
+
+  try { db.exec('ALTER TABLE withdrawals ADD COLUMN fee_paise INTEGER DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE withdrawals ADD COLUMN net_amount_paise INTEGER DEFAULT 0'); } catch (_) {}
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_ledger_user_idempotency 
+    ON wallet_ledger(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS deposit_orders (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
       amount_paise INTEGER NOT NULL,
       payment_method TEXT DEFAULT 'UPI',
       gateway_ref TEXT,
-      status TEXT NOT NULL DEFAULT 'PENDING',
+      status TEXT NOT NULL DEFAULT 'CREATED', -- CREATED, PENDING_PROVIDER, SUCCEEDED, FAILED, EXPIRED
       idempotency_key TEXT UNIQUE,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -69,8 +88,10 @@ function initDb() {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
       amount_paise INTEGER NOT NULL,
+      fee_paise INTEGER DEFAULT 0,
+      net_amount_paise INTEGER NOT NULL,
       upi_id TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'PENDING',
+      status TEXT NOT NULL DEFAULT 'PENDING', -- PENDING, PROCESSING, PAID, FAILED, CANCELLED
       idempotency_key TEXT UNIQUE,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -92,9 +113,10 @@ function initDb() {
       id TEXT PRIMARY KEY,
       game_id TEXT NOT NULL,
       round_number INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'CREATED',
+      status TEXT NOT NULL DEFAULT 'CREATED', -- CREATED, BETTING_OPEN, BETTING_CLOSED, RESULT_GENERATED, SETTLED, FINISHED
       server_seed TEXT NOT NULL,
       seed_hash TEXT NOT NULL,
+      fairness_version INTEGER DEFAULT 1,
       result_dice_1 INTEGER,
       result_dice_2 INTEGER,
       result_sum INTEGER,
@@ -109,9 +131,9 @@ function initDb() {
       user_id TEXT NOT NULL,
       game_id TEXT NOT NULL,
       round_id TEXT NOT NULL,
-      bet_type TEXT NOT NULL,
+      bet_type TEXT NOT NULL, -- DOWN, UP, SEVEN, or specific number
       stake_amount_paise INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'ACCEPTED',
+      status TEXT NOT NULL DEFAULT 'ACCEPTED', -- ACCEPTED, WON, LOST, REFUNDED, REJECTED
       payout_amount_paise INTEGER DEFAULT 0,
       idempotency_key TEXT UNIQUE,
       created_at TEXT NOT NULL,

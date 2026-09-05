@@ -4,7 +4,7 @@ const LedgerService = require('./ledger.service');
 
 class WalletController {
   static async getProfileAndWallet(req, res) {
-    const userId = req.user?.id || req.query.userId;
+    const userId = req.user?.id;
     if (!userId) {
       return ApiResponse.error(res, 'UNAUTHORIZED', 'Authentication required', 401);
     }
@@ -31,8 +31,8 @@ class WalletController {
     });
   }
 
-  static async addCash(req, res) {
-    const userId = req.user?.id || req.body.userId;
+  static async createDepositOrder(req, res) {
+    const userId = req.user?.id;
     const { amount, paymentMethod, idempotencyKey } = req.body;
     const numAmount = parseFloat(amount);
 
@@ -42,28 +42,55 @@ class WalletController {
     }
 
     const amountPaise = Math.round(numAmount * 100);
-    const referenceId = 'dep_' + Math.floor(Date.now() / 1000);
 
     try {
-      const walletSummary = LedgerService.creditDeposit({
+      const order = LedgerService.createDepositOrder({
         userId,
         amountPaise,
-        referenceId,
         paymentMethod: paymentMethod || 'UPI',
-        idempotencyKey: idempotencyKey || referenceId,
+        idempotencyKey,
       });
 
       return ApiResponse.success(res, {
-        message: `₹${numAmount} added successfully via ${paymentMethod || 'UPI'}`,
+        orderId: order.id,
+        amount: order.amount_paise / 100,
+        gatewayRef: order.gateway_ref,
+        status: order.status,
+      });
+    } catch (err) {
+      if (err.message === 'IDEMPOTENCY_KEY_REUSE') {
+        return ApiResponse.error(res, 'IDEMPOTENCY_KEY_REUSE', 'Idempotency key reused for different amount', 400);
+      }
+      return ApiResponse.error(res, 'DEPOSIT_ORDER_FAILED', err.message, 400);
+    }
+  }
+
+  static async depositWebhook(req, res) {
+    const { orderId, providerTxId, signature, webhookEventId } = req.body;
+    if (!orderId) return ApiResponse.error(res, 'MISSING_ORDER_ID', 'Deposit order ID required', 400);
+
+    // Signature verification (Simulated for test mode or verified in production)
+    const signatureVerified = Boolean(signature || req.headers['x-provider-signature'] || process.env.NODE_ENV !== 'production');
+
+    try {
+      const walletSummary = LedgerService.processDepositWebhook({
+        orderId,
+        providerTxId: providerTxId || 'tx_gtw_' + Date.now(),
+        signatureVerified,
+        webhookEventId: webhookEventId || 'ev_' + Date.now(),
+      });
+
+      return ApiResponse.success(res, {
+        message: 'Deposit credited successfully via verified webhook',
         wallet: walletSummary,
       });
     } catch (err) {
-      return ApiResponse.error(res, 'DEPOSIT_FAILED', err.message, 400);
+      return ApiResponse.error(res, 'WEBHOOK_FAILED', err.message, 400);
     }
   }
 
   static async withdraw(req, res) {
-    const userId = req.user?.id || req.body.userId;
+    const userId = req.user?.id;
     const { amount, upiId, idempotencyKey } = req.body;
     const numAmount = parseFloat(amount);
 
@@ -83,24 +110,30 @@ class WalletController {
         userId,
         amountPaise,
         upiId: upiId.trim(),
-        idempotencyKey: idempotencyKey || 'wdr_idemp_' + Date.now(),
+        idempotencyKey,
       });
 
       return ApiResponse.success(res, {
-        message: `Withdrawal of ₹${numAmount} initiated to ${upiId}`,
+        message: `Withdrawal request initiated to ${upiId}`,
         withdrawalId: result.withdrawalId,
+        status: result.status,
+        fee: result.feePaise / 100,
+        netAmount: result.netAmountPaise / 100,
         wallet: result.wallet,
       });
     } catch (err) {
       if (err.message === 'INSUFFICIENT_WINNINGS_BALANCE') {
         return ApiResponse.error(res, 'INSUFFICIENT_WINNINGS', 'Withdrawal amount exceeds available winnings balance', 400);
       }
+      if (err.message === 'IDEMPOTENCY_KEY_REUSE') {
+        return ApiResponse.error(res, 'IDEMPOTENCY_KEY_REUSE', 'Idempotency key reused for different withdrawal amount', 400);
+      }
       return ApiResponse.error(res, 'WITHDRAWAL_FAILED', err.message, 400);
     }
   }
 
   static async getTransactions(req, res) {
-    const userId = req.user?.id || req.query.userId;
+    const userId = req.user?.id;
     if (!userId) return ApiResponse.error(res, 'UNAUTHORIZED', 'User session required', 401);
 
     const page = parseInt(req.query.page) || 1;

@@ -14,17 +14,6 @@ const activeGames = [
     badge: 'HOT 🔥',
     activePlayers: 4520,
   },
-  {
-    id: 'game_fruit_slice',
-    title: 'Fruit Slice Ninja',
-    category: 'Arcade',
-    entryFee: 10.0,
-    prizePool: 18.0,
-    icon: 'assets/nav_icon/nav_game.png',
-    gameUrl: '/games/fruit_slice/index.html',
-    badge: 'POPULAR ⭐',
-    activePlayers: 1420,
-  },
 ];
 
 class GameController {
@@ -36,21 +25,25 @@ class GameController {
     const round = SevenUpDownService.getCurrentRound();
     const now = new Date();
     const closeAt = new Date(round.betting_close_at);
-    const timeRemainingSeconds = Math.max(0, Math.floor((closeAt.getTime() - now.getTime()) / 1000));
+    const remainingMs = Math.max(0, closeAt.getTime() - now.getTime());
+    const timeRemainingSeconds = Math.floor(remainingMs / 1000);
 
     return ApiResponse.success(res, {
       roundId: round.id,
       roundNumber: round.round_number,
       status: round.status,
       seedHash: round.seed_hash,
+      fairnessVersion: round.fairness_version || 1,
       timeRemainingSeconds,
+      remainingMs,
       bettingOpenAt: round.betting_open_at,
       bettingCloseAt: round.betting_close_at,
+      serverSeed: round.status === 'FINISHED' ? round.server_seed : null,
     });
   }
 
   static async joinGameAndPlaceBet(req, res) {
-    const userId = req.user?.id || req.body.userId;
+    const userId = req.user?.id;
     if (!userId) return ApiResponse.error(res, 'UNAUTHORIZED', 'User session required', 401);
 
     const { roundId, betType, stakeAmount, idempotencyKey } = req.body;
@@ -64,7 +57,7 @@ class GameController {
         roundId: activeRound,
         betType: betType || 'DOWN',
         stakeAmountPaise: stakePaise,
-        idempotencyKey: idempotencyKey || 'bet_idemp_' + Date.now(),
+        idempotencyKey,
       });
 
       return ApiResponse.success(res, result);
@@ -72,12 +65,15 @@ class GameController {
       if (err.message === 'INSUFFICIENT_BALANCE') {
         return ApiResponse.error(res, 'INSUFFICIENT_BALANCE', 'Insufficient total wallet balance to place bet', 400);
       }
+      if (err.message === 'IDEMPOTENCY_KEY_REUSE') {
+        return ApiResponse.error(res, 'IDEMPOTENCY_KEY_REUSE', 'Idempotency key reused for different bet amount', 400);
+      }
       return ApiResponse.error(res, 'BET_FAILED', err.message, 400);
     }
   }
 
   static async getBetHistory(req, res) {
-    const userId = req.user?.id || req.query.userId;
+    const userId = req.user?.id;
     if (!userId) return ApiResponse.error(res, 'UNAUTHORIZED', 'User session required', 401);
 
     const page = parseInt(req.query.page) || 1;

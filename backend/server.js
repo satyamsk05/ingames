@@ -8,13 +8,17 @@ require('dotenv').config();
 const apiRoutes = require('./src/routes');
 const SevenUpDownService = require('./src/modules/game/seven_up_down.service');
 const ApiResponse = require('./src/core/api_response');
+const { verifyToken } = require('./src/core/auth_middleware');
 
 const app = express();
 const server = http.createServer(app);
 
+// Explicit CORS origin configuration
+const corsOrigin = process.env.CORS_ORIGIN || '*';
+
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: corsOrigin,
     methods: ['GET', 'POST'],
   },
 });
@@ -22,7 +26,7 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 5050;
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -38,19 +42,32 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Socket.io Realtime Server Initialization
+// Socket.io Realtime Server Initialization & Auth Middleware
 SevenUpDownService.setSocketIO(io);
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+  if (!token) {
+    // Allow anonymous socket for public room broadcasts (timers, results)
+    return next();
+  }
+  try {
+    const decoded = verifyToken(token);
+    if (decoded && decoded.id) {
+      socket.user = decoded;
+    }
+  } catch (_) {}
+  next();
+});
 
 io.on('connection', (socket) => {
   console.log(`🎮 Client Connected: ${socket.id}`);
 
-  // Allow room subscriptions per user
-  socket.on('JOIN_USER_ROOM', (userId) => {
-    if (userId) {
-      socket.join(`user_${userId}`);
-      console.log(`👤 Socket ${socket.id} joined room user_${userId}`);
-    }
-  });
+  // Automatically join server-derived private room if user is authenticated
+  if (socket.user && socket.user.id) {
+    socket.join(`user_${socket.user.id}`);
+    console.log(`🔒 Socket ${socket.id} bound to server-derived room user_${socket.user.id}`);
+  }
 
   socket.on('disconnect', () => {
     console.log(`🔌 Client Disconnected: ${socket.id}`);

@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const ApiResponse = require('./api_response');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_ingames_jwt_key_2026_production';
+const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? (() => { throw new Error('JWT_SECRET is required in production environment'); })() : 'super_secret_ingames_jwt_key_2026_production');
 
 function generateToken(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
@@ -20,6 +20,9 @@ function authMiddleware(req, res, next) {
   const token = authHeader.split(' ')[1];
   try {
     const decoded = verifyToken(token);
+    if (!decoded || !decoded.id) {
+      return ApiResponse.error(res, 'INVALID_TOKEN', 'Invalid session payload', 401);
+    }
     req.user = decoded;
     next();
   } catch (err) {

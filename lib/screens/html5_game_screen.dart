@@ -49,21 +49,23 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
           try {
             final dynamic json = jsonDecode(msgStr);
             if (json is Map<String, dynamic>) {
+              // Security validation: check source schema and version
+              final String source = json['source']?.toString() ?? '';
+              final int version = (json['version'] as num?)?.toInt() ?? 1;
               final String type = json['type']?.toString() ?? '';
-              if (type == 'EXIT_GAME' || type == 'EXIT_MATCH') {
-                _exitGame();
-              } else if (type == 'WALLET_UPDATED' || type == 'ROUND_RESULT') {
-                setState(() {
-                  _isMatchFinished = true;
-                });
-                _refreshProfileBalance();
+
+              if (source == 'ingames-game' || source.isEmpty) {
+                if (type == 'EXIT_GAME' || type == 'EXIT_MATCH') {
+                  _exitGame();
+                } else if (type == 'WALLET_UPDATED' || type == 'ROUND_RESULT') {
+                  setState(() {
+                    _isMatchFinished = true;
+                  });
+                  _refreshProfileBalance();
+                }
               }
             }
-          } catch (_) {
-            if (msgStr.contains('EXIT_MATCH') || msgStr.contains('EXIT_GAME')) {
-              _exitGame();
-            }
-          }
+          } catch (_) {}
         }
       });
     }

@@ -12,6 +12,22 @@ class SevenUpDownService {
   }
 
   /**
+   * Deterministic HMAC-SHA256 Provably Fair Dice Derivation
+   */
+  static deriveDice({ serverSeed, roundId, roundNumber }) {
+    const message = `${roundId}:${roundNumber}:0`;
+    const digest = crypto
+      .createHmac('sha256', serverSeed)
+      .update(message)
+      .digest('hex');
+
+    return {
+      dice1: (parseInt(digest.slice(0, 8), 16) % 6) + 1,
+      dice2: (parseInt(digest.slice(8, 16), 16) % 6) + 1,
+    };
+  }
+
+  /**
    * Get active/current game round
    */
   static getCurrentRound() {
@@ -49,8 +65,8 @@ class SevenUpDownService {
 
     db.prepare(`
       INSERT INTO game_rounds 
-      (id, game_id, round_number, status, server_seed, seed_hash, betting_open_at, betting_close_at, created_at)
-      VALUES (?, 'game_7_up_down', ?, 'BETTING_OPEN', ?, ?, ?, ?, ?)
+      (id, game_id, round_number, status, server_seed, seed_hash, fairness_version, betting_open_at, betting_close_at, created_at)
+      VALUES (?, 'game_7_up_down', ?, 'BETTING_OPEN', ?, ?, 1, ?, ?, ?)
     `).run(roundId, nextRoundNumber, serverSeed, seedHash, bettingOpenAt, bettingCloseAt, bettingOpenAt);
 
     const round = db.prepare('SELECT * FROM game_rounds WHERE id = ?').get(roundId);
@@ -61,6 +77,7 @@ class SevenUpDownService {
         roundId: round.id,
         roundNumber: round.round_number,
         seedHash: round.seed_hash,
+        fairnessVersion: 1,
         bettingCloseAt: round.betting_close_at,
         timeRemainingSeconds: 15,
       });
@@ -91,8 +108,11 @@ class SevenUpDownService {
       throw new Error('BETTING_CLOSED');
     }
 
-    const validTypes = ['DOWN', 'UP', 'SEVEN'];
-    if (!validTypes.includes(betType.toUpperCase())) {
+    const normalizedBetType = betType.toUpperCase().trim();
+    const validMainTypes = ['DOWN', 'UP', 'SEVEN'];
+    const validNumberTypes = ['2', '3', '4', '5', '6', '8', '9', '10', '11', '12'];
+    
+    if (!validMainTypes.includes(normalizedBetType) && !validNumberTypes.includes(normalizedBetType)) {
       throw new Error('INVALID_BET_TYPE');
     }
 
@@ -101,7 +121,7 @@ class SevenUpDownService {
     }
 
     const betId = 'bet_' + crypto.randomUUID().slice(0, 12);
-    const betTitle = `7 Up Down : ${betType.toUpperCase()}`;
+    const betTitle = `7 Up Down : ${normalizedBetType}`;
 
     // Deduct stake using ledger engine
     const walletSummary = LedgerService.deductBetStake({
@@ -115,7 +135,7 @@ class SevenUpDownService {
     db.prepare(`
       INSERT INTO bets (id, user_id, game_id, round_id, bet_type, stake_amount_paise, status, payout_amount_paise, idempotency_key, created_at, updated_at)
       VALUES (?, ?, 'game_7_up_down', ?, ?, ?, 'ACCEPTED', 0, ?, ?, ?)
-    `).run(betId, userId, roundId, betType.toUpperCase(), stakeAmountPaise, idempotencyKey, now, now);
+    `).run(betId, userId, roundId, normalizedBetType, stakeAmountPaise, idempotencyKey, now, now);
 
     const bet = db.prepare('SELECT * FROM bets WHERE id = ?').get(betId);
 
@@ -134,7 +154,7 @@ class SevenUpDownService {
   }
 
   /**
-   * Close betting and roll dice using server RNG
+   * Close betting and roll dice using HMAC-SHA256 provably fair derivation
    */
   static closeBettingAndRoll(roundId) {
     const round = db.prepare('SELECT * FROM game_rounds WHERE id = ?').get(roundId);
@@ -146,10 +166,14 @@ class SevenUpDownService {
       this.ioInstance.emit('BETTING_CLOSED', { roundId, message: 'No more bets!' });
     }
 
-    // Roll 2 dice after 1 second delay
     setTimeout(() => {
-      const dice1 = Math.floor(Math.random() * 6) + 1;
-      const dice2 = Math.floor(Math.random() * 6) + 1;
+      // Deterministic provably fair dice calculation
+      const { dice1, dice2 } = this.deriveDice({
+        serverSeed: round.server_seed,
+        roundId: round.id,
+        roundNumber: round.round_number,
+      });
+
       const sum = dice1 + dice2;
       const closedAt = new Date().toISOString();
 
@@ -173,7 +197,7 @@ class SevenUpDownService {
           dice2,
           sum,
           winningOutcome,
-          serverSeed: updatedRound.server_seed,
+          serverSeed: updatedRound.server_seed, // Revealed seed for verification
           seedHash: updatedRound.seed_hash,
         });
       }
@@ -184,10 +208,16 @@ class SevenUpDownService {
   }
 
   /**
-   * Settle bets for finished round
+   * Settle bets for finished round idempotently
    */
   static settleRoundBets(roundId, sum, winningOutcome) {
     const bets = db.prepare("SELECT * FROM bets WHERE round_id = ? AND status = 'ACCEPTED'").all(roundId);
+
+    // Multipliers for number bets (2->26x, 3->12x, 4->8x, 5->6x, 6->5x, 8->5x, 9->6x, 10->8x, 11->12x, 12->26x)
+    const numberOddsMap = {
+      '2': 26, '3': 12, '4': 8, '5': 6, '6': 5,
+      '8': 5, '9': 6, '10': 8, '11': 12, '12': 26
+    };
 
     for (const bet of bets) {
       let isWin = false;
@@ -202,6 +232,9 @@ class SevenUpDownService {
       } else if (bet.bet_type === 'SEVEN' && sum === 7) {
         isWin = true;
         multiplier = 5;
+      } else if (bet.bet_type === String(sum) && numberOddsMap[String(sum)]) {
+        isWin = true;
+        multiplier = numberOddsMap[String(sum)];
       }
 
       const now = new Date().toISOString();

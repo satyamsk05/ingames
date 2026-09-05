@@ -4,24 +4,26 @@ const router = express.Router();
 const AuthController = require('./modules/auth/auth.controller');
 const WalletController = require('./modules/wallet/wallet.controller');
 const GameController = require('./modules/game/game.controller');
-const { authMiddleware, optionalAuthMiddleware } = require('./core/auth_middleware');
+const { authMiddleware } = require('./core/auth_middleware');
 
-// --- Auth Routes ---
+// --- Auth Routes (Public) ---
 router.post('/auth/send-otp', AuthController.sendOtp);
 router.post('/auth/verify-otp', AuthController.verifyOtp);
 router.post('/auth/google', AuthController.googleAuth);
 
-// --- User Profile & Wallet Routes ---
-router.get('/user/profile', optionalAuthMiddleware, WalletController.getProfileAndWallet);
-router.post('/wallet/add-cash', optionalAuthMiddleware, WalletController.addCash);
-router.post('/wallet/withdraw', optionalAuthMiddleware, WalletController.withdraw);
-router.get('/wallet/transactions', optionalAuthMiddleware, WalletController.getTransactions);
+// --- User Profile & Wallet Routes (Strict Auth Required) ---
+router.get('/user/profile', authMiddleware, WalletController.getProfileAndWallet);
+router.post('/wallet/deposits/orders', authMiddleware, WalletController.createDepositOrder);
+router.post('/wallet/add-cash', authMiddleware, WalletController.createDepositOrder); // Legacy alias
+router.post('/wallet/deposits/webhook', WalletController.depositWebhook); // Webhook callback
+router.post('/wallet/withdraw', authMiddleware, WalletController.withdraw);
+router.get('/wallet/transactions', authMiddleware, WalletController.getTransactions);
 
 // --- Game & Bet Routes ---
 router.get('/games', GameController.getGames);
 router.get('/games/7updown/current-round', GameController.get7UpDownRound);
-router.post('/games/join', optionalAuthMiddleware, GameController.joinGameAndPlaceBet);
-router.get('/games/bet-history', optionalAuthMiddleware, GameController.getBetHistory);
+router.post('/games/join', authMiddleware, GameController.joinGameAndPlaceBet);
+router.get('/games/bet-history', authMiddleware, GameController.getBetHistory);
 
 // App Config Endpoint
 router.get('/config', (req, res) => {

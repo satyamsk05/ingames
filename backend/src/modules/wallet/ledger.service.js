@@ -44,56 +44,115 @@ class LedgerService {
   }
 
   /**
-   * Credit deposit to user wallet atomically
+   * Check idempotency key before financial operations
    */
-  static creditDeposit({ userId, amountPaise, referenceId, paymentMethod, idempotencyKey = null }) {
-    if (amountPaise <= 0) throw new Error('Invalid deposit amount');
+  static checkIdempotency(userId, idempotencyKey, targetAmountPaise = null) {
+    if (!idempotencyKey) return null;
+    const existing = db.prepare(`
+      SELECT * FROM wallet_ledger WHERE user_id = ? AND idempotency_key = ?
+    `).get(userId, idempotencyKey);
 
-    const executeTransaction = db.transaction(() => {
-      // Check idempotency if key provided
-      if (idempotencyKey) {
-        const existing = db.prepare('SELECT * FROM deposits WHERE idempotency_key = ?').get(idempotencyKey);
-        if (existing && existing.status === 'SUCCESS') {
-          return this.getWalletSummary(userId);
-        }
+    if (existing) {
+      if (targetAmountPaise !== null && existing.amount_paise !== targetAmountPaise) {
+        throw new Error('IDEMPOTENCY_KEY_REUSE');
+      }
+      return existing;
+    }
+    return null;
+  }
+
+  /**
+   * Create deposit intent / order
+   */
+  static createDepositOrder({ userId, amountPaise, paymentMethod, idempotencyKey }) {
+    if (amountPaise <= 0 || !Number.isInteger(amountPaise)) {
+      throw new Error('INVALID_DEPOSIT_AMOUNT');
+    }
+
+    if (idempotencyKey) {
+      const existingLedger = this.checkIdempotency(userId, idempotencyKey, amountPaise);
+      if (existingLedger) {
+        throw new Error('IDEMPOTENCY_KEY_REUSE');
       }
 
+      const existing = db.prepare('SELECT * FROM deposit_orders WHERE idempotency_key = ?').get(idempotencyKey);
+      if (existing) {
+        if (existing.amount_paise !== amountPaise) {
+          throw new Error('IDEMPOTENCY_KEY_REUSE');
+        }
+        return existing;
+      }
+    }
+
+    const orderId = 'dep_ord_' + crypto.randomUUID().slice(0, 12);
+    const now = new Date().toISOString();
+    const gatewayRef = 'gtw_ref_' + crypto.randomUUID().slice(0, 8);
+
+    db.prepare(`
+      INSERT INTO deposit_orders (id, user_id, amount_paise, payment_method, gateway_ref, status, idempotency_key, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'PENDING_PROVIDER', ?, ?, ?)
+    `).run(orderId, userId, amountPaise, paymentMethod || 'UPI', gatewayRef, idempotencyKey, now, now);
+
+    return db.prepare('SELECT * FROM deposit_orders WHERE id = ?').get(orderId);
+  }
+
+  /**
+   * Verified Provider Webhook / Test Adapter Callback to credit wallet
+   */
+  static processDepositWebhook({ orderId, providerTxId, signatureVerified, webhookEventId }) {
+    if (!signatureVerified) {
+      throw new Error('INVALID_WEBHOOK_SIGNATURE');
+    }
+
+    const executeTransaction = db.transaction(() => {
+      const order = db.prepare('SELECT * FROM deposit_orders WHERE id = ?').get(orderId);
+      if (!order) throw new Error('ORDER_NOT_FOUND');
+
+      if (order.status === 'SUCCEEDED') {
+        return this.getWalletSummary(order.user_id);
+      }
+
+      const userId = order.user_id;
+      const amountPaise = order.amount_paise;
       const wallet = this.getOrCreateWallet(userId);
+
       const balanceBefore = wallet.cash_balance_paise + wallet.winnings_balance_paise + wallet.bonus_balance_paise;
       const newCashBalance = wallet.cash_balance_paise + amountPaise;
       const balanceAfter = balanceBefore + amountPaise;
       const now = new Date().toISOString();
 
-      // Update wallet balance & bump version
-      db.prepare(`
+      // Optimistic concurrency control & atomic update
+      const res = db.prepare(`
         UPDATE wallets 
         SET cash_balance_paise = ?, version = version + 1, updated_at = ? 
         WHERE id = ? AND version = ?
       `).run(newCashBalance, now, wallet.id, wallet.version);
 
-      // Create ledger entry
+      if (res.changes !== 1) {
+        throw new Error('WALLET_CONFLICT');
+      }
+
+      // Update deposit order status
+      db.prepare(`
+        UPDATE deposit_orders 
+        SET status = 'SUCCEEDED', gateway_ref = ?, updated_at = ?
+        WHERE id = ?
+      `).run(providerTxId || order.gateway_ref, now, order.id);
+
+      // Create ledger entry with explicit deltas
       const ledgerId = 'ldg_' + crypto.randomUUID().slice(0, 12);
       db.prepare(`
         INSERT INTO wallet_ledger 
-        (id, user_id, wallet_id, reference_type, reference_id, direction, amount_paise, balance_before_paise, balance_after_paise, category, metadata_json, created_at)
-        VALUES (?, ?, ?, 'DEPOSIT', ?, 'CREDIT', ?, ?, ?, 'Deposit', ?, ?)
-      `).run(ledgerId, userId, wallet.id, referenceId, amountPaise, balanceBefore, balanceAfter, JSON.stringify({ paymentMethod }), now);
+        (id, user_id, wallet_id, reference_type, reference_id, idempotency_key, direction, delta_cash_paise, delta_winnings_paise, delta_bonus_paise, delta_locked_paise, amount_paise, balance_before_paise, balance_after_paise, category, metadata_json, created_at)
+        VALUES (?, ?, ?, 'DEPOSIT', ?, ?, 'CREDIT', ?, 0, 0, 0, ?, ?, ?, 'Deposit', ?, ?)
+      `).run(ledgerId, userId, wallet.id, order.id, order.idempotency_key, amountPaise, amountPaise, balanceBefore, balanceAfter, JSON.stringify({ providerTxId, webhookEventId }), now);
 
-      // Create public transaction record
+      // Transaction entry
       const txId = 'tx_' + crypto.randomUUID().slice(0, 12);
       db.prepare(`
         INSERT INTO transactions (id, user_id, type, amount_paise, is_credit, title, category, reference_id, created_at)
         VALUES (?, ?, 'DEPOSIT', ?, 1, ?, 'Deposit', ?, ?)
-      `).run(txId, userId, amountPaise, `Cash Deposited (${paymentMethod || 'UPI'})`, referenceId, now);
-
-      // Record deposit record status
-      if (idempotencyKey) {
-        db.prepare(`
-          INSERT INTO deposits (id, user_id, amount_paise, payment_method, gateway_ref, status, idempotency_key, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, 'SUCCESS', ?, ?, ?)
-          ON CONFLICT(idempotency_key) DO UPDATE SET status = 'SUCCESS', updated_at = excluded.updated_at
-        `).run(referenceId, userId, amountPaise, paymentMethod || 'UPI', referenceId, idempotencyKey, now, now);
-      }
+      `).run(txId, userId, amountPaise, `Cash Deposited (${order.payment_method})`, order.id, now);
 
       return this.getWalletSummary(userId);
     });
@@ -102,21 +161,31 @@ class LedgerService {
   }
 
   /**
-   * Request withdrawal - locks funds in locked_balance_paise
+   * Request withdrawal - Server calculates fee/cashback & locks funds
    */
   static requestWithdrawal({ userId, amountPaise, upiId, idempotencyKey }) {
-    if (amountPaise <= 0) throw new Error('Invalid withdrawal amount');
+    if (amountPaise <= 0 || !Number.isInteger(amountPaise)) {
+      throw new Error('INVALID_WITHDRAWAL_AMOUNT');
+    }
+
+    const existingIdemp = this.checkIdempotency(userId, idempotencyKey, amountPaise);
+    if (existingIdemp) {
+      return {
+        withdrawalId: existingIdemp.reference_id,
+        status: 'PENDING',
+        wallet: this.getWalletSummary(userId),
+      };
+    }
 
     const executeTransaction = db.transaction(() => {
-      if (idempotencyKey) {
-        const existing = db.prepare('SELECT * FROM withdrawals WHERE idempotency_key = ?').get(idempotencyKey);
-        if (existing) return existing;
-      }
-
       const wallet = this.getOrCreateWallet(userId);
       if (wallet.winnings_balance_paise < amountPaise) {
         throw new Error('INSUFFICIENT_WINNINGS_BALANCE');
       }
+
+      // Server calculates fees: 5% processing fee (min ₹1, max ₹50)
+      const calculatedFeePaise = Math.min(5000, Math.max(100, Math.round(amountPaise * 0.05)));
+      const netAmountPaise = Math.max(0, amountPaise - calculatedFeePaise);
 
       const balanceBefore = wallet.cash_balance_paise + wallet.winnings_balance_paise + wallet.bonus_balance_paise;
       const newWinnings = wallet.winnings_balance_paise - amountPaise;
@@ -124,26 +193,30 @@ class LedgerService {
       const balanceAfter = balanceBefore - amountPaise;
       const now = new Date().toISOString();
 
-      // Deduct winnings and add to locked balance
-      db.prepare(`
+      // Optimistic concurrency locking
+      const res = db.prepare(`
         UPDATE wallets 
         SET winnings_balance_paise = ?, locked_balance_paise = ?, version = version + 1, updated_at = ?
         WHERE id = ? AND version = ?
       `).run(newWinnings, newLocked, now, wallet.id, wallet.version);
 
+      if (res.changes !== 1) {
+        throw new Error('WALLET_CONFLICT');
+      }
+
       const withdrawalId = 'wdr_' + crypto.randomUUID().slice(0, 12);
       db.prepare(`
-        INSERT INTO withdrawals (id, user_id, amount_paise, upi_id, status, idempotency_key, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?)
-      `).run(withdrawalId, userId, amountPaise, upiId, idempotencyKey, now, now);
+        INSERT INTO withdrawals (id, user_id, amount_paise, fee_paise, net_amount_paise, upi_id, status, idempotency_key, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)
+      `).run(withdrawalId, userId, amountPaise, calculatedFeePaise, netAmountPaise, upiId, idempotencyKey, now, now);
 
-      // Ledger entry
+      // Ledger entry with deltas
       const ledgerId = 'ldg_' + crypto.randomUUID().slice(0, 12);
       db.prepare(`
         INSERT INTO wallet_ledger 
-        (id, user_id, wallet_id, reference_type, reference_id, direction, amount_paise, balance_before_paise, balance_after_paise, category, metadata_json, created_at)
-        VALUES (?, ?, ?, 'WITHDRAWAL', ?, 'DEBIT', ?, ?, ?, 'Withdrawal', ?, ?)
-      `).run(ledgerId, userId, wallet.id, withdrawalId, amountPaise, balanceBefore, balanceAfter, JSON.stringify({ upiId }), now);
+        (id, user_id, wallet_id, reference_type, reference_id, idempotency_key, direction, delta_cash_paise, delta_winnings_paise, delta_bonus_paise, delta_locked_paise, amount_paise, balance_before_paise, balance_after_paise, category, metadata_json, created_at)
+        VALUES (?, ?, ?, 'WITHDRAWAL', ?, ?, 'DEBIT', 0, ?, 0, ?, ?, ?, ?, 'Withdrawal', ?, ?)
+      `).run(ledgerId, userId, wallet.id, withdrawalId, idempotencyKey, -amountPaise, amountPaise, amountPaise, balanceBefore, balanceAfter, JSON.stringify({ upiId, calculatedFeePaise, netAmountPaise }), now);
 
       // Transaction entry
       const txId = 'tx_' + crypto.randomUUID().slice(0, 12);
@@ -155,6 +228,8 @@ class LedgerService {
       return {
         withdrawalId,
         status: 'PENDING',
+        feePaise: calculatedFeePaise,
+        netAmountPaise,
         wallet: this.getWalletSummary(userId),
       };
     });
@@ -163,17 +238,19 @@ class LedgerService {
   }
 
   /**
-   * Deduct bet stake from wallet (Deposit balance first, then Winnings balance)
+   * Deduct bet stake from wallet atomically
    */
   static deductBetStake({ userId, stakePaise, referenceId, betTitle, idempotencyKey }) {
-    if (stakePaise <= 0) throw new Error('Invalid stake amount');
+    if (stakePaise <= 0 || !Number.isInteger(stakePaise)) {
+      throw new Error('INVALID_STAKE_AMOUNT');
+    }
+
+    const existingIdemp = this.checkIdempotency(userId, idempotencyKey, stakePaise);
+    if (existingIdemp) {
+      return this.getWalletSummary(userId);
+    }
 
     const executeTransaction = db.transaction(() => {
-      if (idempotencyKey) {
-        const existingBet = db.prepare('SELECT * FROM bets WHERE idempotency_key = ?').get(idempotencyKey);
-        if (existingBet) return existingBet;
-      }
-
       const wallet = this.getOrCreateWallet(userId);
       const totalAvailable = wallet.cash_balance_paise + wallet.winnings_balance_paise;
       if (totalAvailable < stakePaise) {
@@ -183,11 +260,16 @@ class LedgerService {
       const balanceBefore = totalAvailable + wallet.bonus_balance_paise;
       let newCash = wallet.cash_balance_paise;
       let newWinnings = wallet.winnings_balance_paise;
+      let deltaCash = 0;
+      let deltaWinnings = 0;
 
       if (newCash >= stakePaise) {
         newCash -= stakePaise;
+        deltaCash = -stakePaise;
       } else {
         const rem = stakePaise - newCash;
+        deltaCash = -newCash;
+        deltaWinnings = -rem;
         newCash = 0;
         newWinnings -= rem;
       }
@@ -195,18 +277,22 @@ class LedgerService {
       const balanceAfter = balanceBefore - stakePaise;
       const now = new Date().toISOString();
 
-      db.prepare(`
+      const res = db.prepare(`
         UPDATE wallets 
         SET cash_balance_paise = ?, winnings_balance_paise = ?, version = version + 1, updated_at = ?
         WHERE id = ? AND version = ?
       `).run(newCash, newWinnings, now, wallet.id, wallet.version);
 
+      if (res.changes !== 1) {
+        throw new Error('WALLET_CONFLICT');
+      }
+
       const ledgerId = 'ldg_' + crypto.randomUUID().slice(0, 12);
       db.prepare(`
         INSERT INTO wallet_ledger 
-        (id, user_id, wallet_id, reference_type, reference_id, direction, amount_paise, balance_before_paise, balance_after_paise, category, metadata_json, created_at)
-        VALUES (?, ?, ?, 'BET', ?, 'DEBIT', ?, ?, ?, 'Game', ?, ?)
-      `).run(ledgerId, userId, wallet.id, referenceId, stakePaise, balanceBefore, balanceAfter, JSON.stringify({ betTitle }), now);
+        (id, user_id, wallet_id, reference_type, reference_id, idempotency_key, direction, delta_cash_paise, delta_winnings_paise, delta_bonus_paise, delta_locked_paise, amount_paise, balance_before_paise, balance_after_paise, category, metadata_json, created_at)
+        VALUES (?, ?, ?, 'BET', ?, ?, 'DEBIT', ?, ?, 0, 0, ?, ?, ?, 'Game', ?, ?)
+      `).run(ledgerId, userId, wallet.id, referenceId, idempotencyKey, deltaCash, deltaWinnings, stakePaise, balanceBefore, balanceAfter, JSON.stringify({ betTitle }), now);
 
       const txId = 'tx_' + crypto.randomUUID().slice(0, 12);
       db.prepare(`
@@ -227,7 +313,6 @@ class LedgerService {
     if (payoutPaise <= 0) return this.getWalletSummary(userId);
 
     const executeTransaction = db.transaction(() => {
-      // Idempotency check on settlement
       const existingSettlement = db.prepare('SELECT * FROM settlements WHERE bet_id = ?').get(betId);
       if (existingSettlement) {
         return this.getWalletSummary(userId);
@@ -239,28 +324,29 @@ class LedgerService {
       const balanceAfter = balanceBefore + payoutPaise;
       const now = new Date().toISOString();
 
-      db.prepare(`
+      const res = db.prepare(`
         UPDATE wallets 
         SET winnings_balance_paise = ?, version = version + 1, updated_at = ?
         WHERE id = ? AND version = ?
       `).run(newWinnings, now, wallet.id, wallet.version);
 
-      // Settlement log
+      if (res.changes !== 1) {
+        throw new Error('WALLET_CONFLICT');
+      }
+
       const settlementId = 'stl_' + crypto.randomUUID().slice(0, 12);
       db.prepare(`
         INSERT INTO settlements (id, bet_id, round_id, user_id, payout_amount_paise, status, settled_at)
         VALUES (?, ?, ?, ?, ?, 'COMPLETED', ?)
       `).run(settlementId, betId, referenceId, userId, payoutPaise, now);
 
-      // Ledger entry
       const ledgerId = 'ldg_' + crypto.randomUUID().slice(0, 12);
       db.prepare(`
         INSERT INTO wallet_ledger 
-        (id, user_id, wallet_id, reference_type, reference_id, direction, amount_paise, balance_before_paise, balance_after_paise, category, metadata_json, created_at)
-        VALUES (?, ?, ?, 'WIN', ?, 'CREDIT', ?, ?, ?, 'Game', ?, ?)
-      `).run(ledgerId, userId, wallet.id, betId, payoutPaise, balanceBefore, balanceAfter, JSON.stringify({ gameTitle, diceResult }), now);
+        (id, user_id, wallet_id, reference_type, reference_id, idempotency_key, direction, delta_cash_paise, delta_winnings_paise, delta_bonus_paise, delta_locked_paise, amount_paise, balance_before_paise, balance_after_paise, category, metadata_json, created_at)
+        VALUES (?, ?, ?, 'WIN', ?, ?, 'CREDIT', 0, ?, 0, 0, ?, ?, ?, 'Game', ?, ?)
+      `).run(ledgerId, userId, wallet.id, betId, `win_${betId}`, payoutPaise, payoutPaise, balanceBefore, balanceAfter, JSON.stringify({ gameTitle, diceResult }), now);
 
-      // Transaction entry
       const txId = 'tx_' + crypto.randomUUID().slice(0, 12);
       db.prepare(`
         INSERT INTO transactions (id, user_id, type, amount_paise, is_credit, title, category, reference_id, created_at)
@@ -274,5 +360,4 @@ class LedgerService {
   }
 }
 
-module.LedgerService = LedgerService;
 module.exports = LedgerService;
