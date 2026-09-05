@@ -63,14 +63,17 @@ export class Header {
         e.preventDefault();
         e.stopPropagation();
         soundManager.playClick();
-        try {
-          window.parent.postMessage(JSON.stringify({
-            source: 'ingames-game',
-            version: 1,
-            type: 'EXIT_MATCH'
-          }), '*');
-        } catch (_) {}
-        window.history.back();
+        if (window.parent && window.parent !== window) {
+          try {
+            window.parent.postMessage(JSON.stringify({
+              source: 'ingames-game',
+              version: 1,
+              type: 'EXIT_MATCH'
+            }), '*');
+          } catch (_) {}
+        } else {
+          window.history.back();
+        }
       });
     }
   }
