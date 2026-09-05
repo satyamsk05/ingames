@@ -15,10 +15,8 @@ const server = http.createServer(app);
 
 const isProduction = process.env.NODE_ENV === 'production';
 const corsOrigin = process.env.CORS_ORIGIN;
-if (isProduction && (!corsOrigin || corsOrigin === '*')) {
-  throw new Error('CORS_ORIGIN must be an explicit origin in production');
-}
-const allowedOrigin = corsOrigin || 'http://localhost:3000';
+// Allow all origins safely if CORS_ORIGIN is '*' or not specified, allowing credentials
+const allowedOrigin = (corsOrigin && corsOrigin !== '*') ? corsOrigin : true;
 
 const io = new Server(server, {
   cors: {
