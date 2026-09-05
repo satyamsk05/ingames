@@ -28,6 +28,7 @@ import 'screens/html5_game_screen.dart';
 import 'services/api_service.dart';
 import 'core/storage/token_manager.dart';
 import 'features/wallet/data/wallet_api.dart';
+import 'widgets/network_error_widget.dart';
 
 class CustomMouseScrollBehavior extends MaterialScrollBehavior {
   const CustomMouseScrollBehavior();
@@ -110,6 +111,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
   double _selectedPrizePool = 20.0;
   String _selectedGameUrl = '/games/seven_up_down/index.html';
   String _transactionsFilter = 'All';
+  bool _isOffline = false;
 
   @override
   void initState() {
@@ -120,6 +122,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
   }
 
   Future<void> _fetchUserData() async {
+    bool hasError = false;
     try {
       final profile = await WalletApi.getUserProfile();
       if (mounted) {
@@ -134,7 +137,9 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
           }
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      hasError = true;
+    }
 
     try {
       final txRes = await WalletApi.getTransactions();
@@ -157,6 +162,12 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
         });
       }
     } catch (_) {}
+
+    if (mounted) {
+      setState(() {
+        _isOffline = hasError;
+      });
+    }
   }
 
   final List<TransactionItemData> _transactionsList = [];
@@ -290,8 +301,17 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
 
             // Main Screen Content
             Expanded(
-              child: _isHtml5GameActive
-                  ? Html5GameScreen(
+              child: _isOffline
+                  ? NetworkErrorWidget(
+                      onRetry: () {
+                        setState(() {
+                          _isOffline = false;
+                        });
+                        _fetchUserData();
+                      },
+                    )
+                  : _isHtml5GameActive
+                      ? Html5GameScreen(
                       gameTitle: _selectedGameTitle,
                       entryFee: _selectedEntryFee,
                       prizePool: _selectedPrizePool,

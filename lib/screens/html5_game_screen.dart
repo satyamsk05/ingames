@@ -9,6 +9,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../features/wallet/data/wallet_api.dart';
 import '../core/storage/token_manager.dart';
 import '../services/api_service.dart';
+import '../widgets/network_error_widget.dart';
 import 'html5_helper.dart';
 
 class Html5GameScreen extends StatefulWidget {
@@ -37,6 +38,7 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
   final String _viewId = 'html5_game_iframe_${DateTime.now().millisecondsSinceEpoch}';
   bool _isLoading = true;
   bool _isMatchFinished = false;
+  bool _hasWebError = false;
   WebViewController? _webViewController;
 
   @override
@@ -94,6 +96,7 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
             onWebResourceError: (_) {
               if (mounted) {
                 setState(() {
+                  _hasWebError = true;
                   _isLoading = false;
                 });
               }
@@ -560,7 +563,19 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
             Expanded(
               child: Stack(
                 children: [
-                  if (kIsWeb)
+                  if (_hasWebError)
+                    NetworkErrorWidget(
+                      customMessage:
+                          'Failed to load ${widget.gameTitle}. Please check your internet connection and tap Retry Connection.',
+                      onRetry: () {
+                        setState(() {
+                          _hasWebError = false;
+                          _isLoading = true;
+                        });
+                        _webViewController?.reload();
+                      },
+                    )
+                  else if (kIsWeb)
                     buildPlatformIframe(_viewId)
                   else if (_webViewController != null)
                     WebViewWidget(controller: _webViewController!)
