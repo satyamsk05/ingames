@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/api_service.dart';
+import '../features/wallet/data/wallet_api.dart';
 
 class OfferData {
   final int amount;
@@ -60,7 +60,7 @@ class _AddCashScreenState extends State<AddCashScreen> {
     final enteredAmount = double.tryParse(_amountController.text) ?? 0;
     if (enteredAmount <= 0) return;
 
-    await ApiService.addCash(amount: enteredAmount, paymentMethod: method);
+    await WalletApi.addCash(amount: enteredAmount, paymentMethod: method);
 
     widget.onAddCashCompleted(enteredAmount);
     setState(() {

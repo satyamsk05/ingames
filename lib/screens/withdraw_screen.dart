@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/api_service.dart';
+import '../features/wallet/data/wallet_api.dart';
+import '../core/api/api_client.dart';
 
 class WithdrawScreen extends StatefulWidget {
   final double winningsBalance;
@@ -42,11 +43,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
   bool get _isValidAmount {
     if (_enteredAmount < 25) return false;
-    if (_enteredAmount > widget.winningsBalance && widget.winningsBalance >= 25) {
-      // Allow testing if balance is small, but enforce logic
-      return true; 
-    }
-    return true;
+    return _enteredAmount <= widget.winningsBalance;
   }
 
   void _proceedToSelectMethod() {
@@ -62,15 +59,29 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     final fee = isDepositBack ? 0.0 : (amount * 0.05).clamp(1.0, 50.0);
     final netAmount = isDepositBack ? (amount + cashback) : (amount - fee);
 
-    await ApiService.withdrawCash(amount: amount, upiId: _upiIdController.text);
-    widget.onWithdrawCompleted(amount, netAmount, isDepositBack);
+    try {
+      await WalletApi.withdrawCash(amount: amount, upiId: _upiIdController.text);
+      widget.onWithdrawCompleted(amount, netAmount, isDepositBack);
 
-    if (mounted) {
-      _showWithdrawalSuccessModal(
-        amount: amount,
-        netAmount: netAmount,
-        isDepositBack: isDepositBack,
-      );
+      if (mounted) {
+        _showWithdrawalSuccessModal(
+          amount: amount,
+          netAmount: netAmount,
+          isDepositBack: isDepositBack,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e is ApiException ? e.message : 'Withdrawal failed. Check winnings balance and UPI ID.',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 
@@ -288,9 +299,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   // STEP 1: Enter Amount
   // --------------------------------------------------------------------------
   Widget _buildStepEnterAmount() {
-    final winningsStr = widget.winningsBalance > 0
-        ? widget.winningsBalance.toStringAsFixed(2)
-        : '36.46';
+    final winningsStr = widget.winningsBalance.toStringAsFixed(2);
 
     return Stack(
       children: [

@@ -26,6 +26,8 @@ import 'widgets/promo_banner.dart';
 import 'screens/login_screen.dart';
 import 'screens/html5_game_screen.dart';
 import 'services/api_service.dart';
+import 'core/storage/token_manager.dart';
+import 'features/wallet/data/wallet_api.dart';
 
 class CustomMouseScrollBehavior extends MaterialScrollBehavior {
   const CustomMouseScrollBehavior();
@@ -39,8 +41,9 @@ class CustomMouseScrollBehavior extends MaterialScrollBehavior {
       };
 }
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await TokenManager.init();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -84,13 +87,13 @@ class InGamesHomeScreen extends StatefulWidget {
 }
 
 class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
-  bool _isLoggedIn = false;
+  bool _isLoggedIn = TokenManager.isAuthenticated;
   int _currentNavIndex = 0;
-  double _depositBalance = 800.0;
-  double _winningsBalance = 450.0;
+  double _depositBalance = 0.0;
+  double _winningsBalance = 0.0;
   final double _rewardsBalance = 0.0;
-  String _userName = 'Ashu K';
-  String _phoneNumber = '+91727*****82';
+  String _userName = 'Player';
+  String _phoneNumber = '';
   String _currentAvatarPath = 'assets/avatar/avatar_1.png';
   bool _isProfilePageActive = false;
   bool _isWithdrawPageActive = false;
@@ -102,103 +105,61 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
   bool _isContactUsPageActive = false;
   bool _isFairPlayPageActive = false;
   bool _isHtml5GameActive = false;
-  String _selectedGameTitle = 'Fruit Slice Ninja';
+  String _selectedGameTitle = '7 Up Down';
   double _selectedEntryFee = 10.0;
-  double _selectedPrizePool = 18.0;
-  String _selectedGameUrl = '/games/fruit_slice/index.html';
+  double _selectedPrizePool = 20.0;
+  String _selectedGameUrl = '/games/seven_up_down/index.html';
   String _transactionsFilter = 'All';
 
   @override
   void initState() {
     super.initState();
-    _fetchUserData();
+    if (_isLoggedIn) {
+      _fetchUserData();
+    }
   }
 
   Future<void> _fetchUserData() async {
-    final profile = await ApiService.getUserProfile();
-    if (profile != null && profile['data'] != null) {
-      final d = profile['data'];
+    try {
+      final profile = await WalletApi.getUserProfile();
       if (mounted) {
         setState(() {
-          _depositBalance = (d['depositBalance'] as num?)?.toDouble() ?? _depositBalance;
-          _winningsBalance = (d['winningsBalance'] as num?)?.toDouble() ?? _winningsBalance;
-          if (d['username'] != null && d['username'].toString().isNotEmpty) {
-            _userName = d['username'].toString();
+          _depositBalance = (profile['depositBalance'] as num?)?.toDouble() ?? 0.0;
+          _winningsBalance = (profile['winningsBalance'] as num?)?.toDouble() ?? 0.0;
+          if (profile['username'] != null && profile['username'].toString().isNotEmpty) {
+            _userName = profile['username'].toString();
+          }
+          if (profile['phoneNumber'] != null) {
+            _phoneNumber = profile['phoneNumber'].toString();
           }
         });
       }
-    }
+    } catch (_) {}
 
-    final txs = await ApiService.getTransactions();
-    if (txs != null && mounted) {
-      setState(() {
-        _transactionsList.clear();
-        for (var t in txs) {
-          _transactionsList.add(
-            TransactionItemData(
-              id: t['id']?.toString() ?? '',
-              title: t['title']?.toString() ?? 'Transaction',
-              amount: (t['amount'] as num?)?.toDouble() ?? 0.0,
-              isCredit: t['isCredit'] == true,
-              timestamp: DateTime.tryParse(t['timestamp']?.toString() ?? '') ?? DateTime.now(),
-              category: t['category']?.toString() ?? 'General',
-            ),
-          );
-        }
-      });
-    }
+    try {
+      final txRes = await WalletApi.getTransactions();
+      final items = txRes['items'] as List<dynamic>? ?? [];
+      if (mounted) {
+        setState(() {
+          _transactionsList.clear();
+          for (var t in items) {
+            _transactionsList.add(
+              TransactionItemData(
+                id: t['id']?.toString() ?? '',
+                title: t['title']?.toString() ?? 'Transaction',
+                amount: (t['amount'] as num?)?.toDouble() ?? 0.0,
+                isCredit: t['isCredit'] == true,
+                timestamp: DateTime.tryParse(t['timestamp']?.toString() ?? '') ?? DateTime.now(),
+                category: t['category']?.toString() ?? 'General',
+              ),
+            );
+          }
+        });
+      }
+    } catch (_) {}
   }
 
-  final List<TransactionItemData> _transactionsList = [
-    TransactionItemData(
-      id: '1',
-      title: 'Day 2 Reward',
-      amount: 8.0,
-      isCredit: true,
-      timestamp: DateTime(2026, 9, 11, 2, 36),
-      category: 'Reward',
-    ),
-    TransactionItemData(
-      id: '2',
-      title: 'Cash Deposited',
-      amount: 500.0,
-      isCredit: true,
-      timestamp: DateTime(2026, 9, 11, 2, 34),
-      category: 'Deposit',
-    ),
-    TransactionItemData(
-      id: '3',
-      title: 'Cash Deposited',
-      amount: 15.0,
-      isCredit: true,
-      timestamp: DateTime(2026, 9, 11, 2, 34),
-      category: 'Deposit',
-    ),
-    TransactionItemData(
-      id: '4',
-      title: 'Cash Deposited',
-      amount: 10.0,
-      isCredit: true,
-      timestamp: DateTime(2026, 9, 11, 2, 30),
-      category: 'Deposit',
-    ),
-    TransactionItemData(
-      id: '5',
-      title: 'Won : Call Break',
-      amount: 20.0,
-      isCredit: true,
-      timestamp: DateTime(2026, 9, 10, 14, 33),
-      category: 'Game',
-    ),
-    TransactionItemData(
-      id: '6',
-      title: 'Entry Fee : Call Break',
-      amount: 20.0,
-      isCredit: false,
-      timestamp: DateTime(2026, 9, 10, 14, 19),
-      category: 'Game',
-    ),
-  ];
+  final List<TransactionItemData> _transactionsList = [];
 
   double get _totalBalance => _depositBalance + _winningsBalance + _rewardsBalance;
 

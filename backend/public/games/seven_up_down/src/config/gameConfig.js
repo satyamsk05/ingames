@@ -3,7 +3,7 @@ export const gameConfig = {
   version: 'v_001_002',
   minBet: 10,
   maxBet: 500,
-  defaultBalance: 800.00,
+  defaultBalance: 0.00,
   rollDurationMs: 1500,
   resetDelayMs: 3000
 };

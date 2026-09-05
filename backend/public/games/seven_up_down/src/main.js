@@ -53,6 +53,30 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize Realtime Socket
   gameSocket.init();
 
+  // Listen for postMessage events from Flutter parent window
+  window.addEventListener('message', (event) => {
+    try {
+      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      if (data && typeof data === 'object') {
+        if (data.type === 'BALANCE_SNAPSHOT' || data.type === 'WALLET_UPDATED') {
+          const balance = data.payload?.balance ?? data.balance;
+          if (balance !== undefined) {
+            gameState.setBalance(balance);
+          }
+        }
+        if (data.type === 'PLAYER_CONFIG') {
+          if (data.payload?.username) {
+            const nameEl = document.getElementById('userNameText');
+            if (nameEl) nameEl.textContent = data.payload.username;
+          }
+          if (data.payload?.balance !== undefined) {
+            gameState.setBalance(data.payload.balance);
+          }
+        }
+      }
+    } catch (_) {}
+  });
+
   // Start Main Game Engine Loop
   gameEngine.init();
 });

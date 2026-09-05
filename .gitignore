@@ -62,4 +62,11 @@ graphify-out/
 *.env
 !.env.example
 
+# Local SQLite & Test scripts
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+backend/test_db.js
+
+
 

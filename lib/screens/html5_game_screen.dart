@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../services/api_service.dart';
+import '../features/wallet/data/wallet_api.dart';
+import '../features/game/data/game_api.dart';
 import 'html5_helper.dart';
 
 class Html5GameScreen extends StatefulWidget {
@@ -45,25 +47,32 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
       setupWebMessageListener((msgStr) async {
         if (mounted) {
           try {
-            if (msgStr.contains('EXIT_MATCH')) {
-              _exitGame();
-            } else if (msgStr.contains('MATCH_FINISHED') || msgStr.contains('WALLET_UPDATED')) {
-              setState(() {
-                _isMatchFinished = true;
-              });
-              _refreshProfileBalance();
+            final dynamic json = jsonDecode(msgStr);
+            if (json is Map<String, dynamic>) {
+              final String type = json['type']?.toString() ?? '';
+              if (type == 'EXIT_GAME' || type == 'EXIT_MATCH') {
+                _exitGame();
+              } else if (type == 'WALLET_UPDATED' || type == 'ROUND_RESULT') {
+                setState(() {
+                  _isMatchFinished = true;
+                });
+                _refreshProfileBalance();
+              }
             }
-          } catch (_) {}
+          } catch (_) {
+            if (msgStr.contains('EXIT_MATCH') || msgStr.contains('EXIT_GAME')) {
+              _exitGame();
+            }
+          }
         }
       });
     }
   }
 
   Future<void> _initializeGameAndDeductFee() async {
-    if (widget.entryFee > 0) {
-      await ApiService.joinGame(gameId: widget.gameTitle, entryFee: widget.entryFee);
+    try {
       await _refreshProfileBalance();
-    }
+    } catch (_) {}
     if (mounted) {
       setState(() {
         _isLoading = false;
@@ -72,13 +81,15 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
   }
 
   Future<void> _refreshProfileBalance() async {
-    final profile = await ApiService.getUserProfile();
-    if (profile != null && profile['data'] != null) {
-      final totalBalance = (profile['data']['totalBalance'] as num?)?.toDouble() ?? 0.0;
-      if (mounted && widget.onBalanceUpdated != null) {
-        widget.onBalanceUpdated!(totalBalance);
+    try {
+      final profile = await WalletApi.getUserProfile();
+      if (profile.containsKey('totalBalance')) {
+        final totalBalance = (profile['totalBalance'] as num?)?.toDouble() ?? 0.0;
+        if (mounted && widget.onBalanceUpdated != null) {
+          widget.onBalanceUpdated!(totalBalance);
+        }
       }
-    }
+    } catch (_) {}
   }
 
   void _exitGame() {

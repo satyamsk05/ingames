@@ -2,8 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/api_service.dart';
-import 'html5_helper.dart';
+import '../core/api/api_client.dart';
+import '../core/storage/token_manager.dart';
+import '../features/auth/data/auth_api.dart';
 
 enum LoginStep { selectMethod, enterPhone, verifyOtp }
 
@@ -70,21 +71,18 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMessage = null;
     });
 
-    final response = await ApiService.sendOtp(phone: phone, channel: _otpChannel);
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (response != null && response['status'] == 'success') {
+    try {
+      await AuthApi.sendOtp(phone);
       setState(() {
+        _isLoading = false;
         _enteredOtp = '';
         _currentStep = LoginStep.verifyOtp;
       });
       _startResendTimer();
-    } else {
+    } catch (e) {
       setState(() {
-        _errorMessage = response?['message'] ?? 'Failed to send OTP. Try again.';
+        _isLoading = false;
+        _errorMessage = e is ApiException ? e.message : 'Failed to send OTP. Check backend server connection.';
       });
     }
   }
@@ -96,18 +94,28 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMessage = null;
     });
 
-    final response = await ApiService.verifyOtp(phone: phone, otp: pin);
+    try {
+      final response = await AuthApi.verifyOtp(phone, pin);
+      final token = response['token']?.toString() ?? '';
+      final user = response['user'] as Map<String, dynamic>? ?? {};
 
-    setState(() {
-      _isLoading = false;
-    });
+      await TokenManager.saveSession(
+        token: token,
+        userId: user['id']?.toString() ?? '',
+        username: user['username']?.toString(),
+        phone: user['phone']?.toString(),
+      );
 
-    if (response != null && response['status'] == 'success') {
-      widget.onLoginSuccess(response);
-    } else {
       setState(() {
+        _isLoading = false;
+      });
+
+      widget.onLoginSuccess(response);
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
         _enteredOtp = '';
-        _errorMessage = response?['message'] ?? 'Invalid OTP code entered. Please try again.';
+        _errorMessage = e is ApiException ? e.message : 'Invalid OTP code entered. Please try again.';
       });
     }
   }
@@ -262,22 +270,34 @@ class _LoginScreenState extends State<LoginScreen> {
       _errorMessage = null;
     });
 
-    // Check backend Auth0 status or trigger Auth0 Universal Login
-    final response = await ApiService.loginWithGoogle(
-      email: 'satyam.gamer@gmail.com',
-      name: 'Satyam Kumar',
-      picture: 'assets/avatar/avatar_1.png',
-    );
+    try {
+      final response = await AuthApi.loginWithGoogle(
+        email: 'satyam.gamer@gmail.com',
+        name: 'Satyam Kumar',
+        googleId: 'g_satyam_1001',
+        picture: 'assets/avatar/avatar_1.png',
+      );
 
-    setState(() {
-      _isLoading = false;
-    });
+      final token = response['token']?.toString() ?? '';
+      final user = response['user'] as Map<String, dynamic>? ?? {};
 
-    if (response != null && response['status'] == 'success') {
+      await TokenManager.saveSession(
+        token: token,
+        userId: user['id']?.toString() ?? '',
+        username: user['username']?.toString(),
+        phone: user['phone']?.toString(),
+      );
+
+      setState(() {
+        _isLoading = false;
+      });
+
       widget.onLoginSuccess(response);
-    } else {
-      // Trigger Auth0 Universal Hosted OAuth Login Flow
-      openAuth0UniversalLogin(ApiService.serverDomain);
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e is ApiException ? e.message : 'Google authentication failed. Please check network connection.';
+      });
     }
   }
 
