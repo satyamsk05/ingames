@@ -60,15 +60,24 @@ class GameCard extends StatelessWidget {
                 data.imagePath,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: Colors.purple.shade900,
-                    child: Center(
-                      child: Icon(
-                        Icons.sports_esports_rounded,
-                        size: 60,
-                        color: data.accentColor,
-                      ),
-                    ),
+                  final altPath = data.imagePath.startsWith('assets/')
+                      ? data.imagePath.replaceFirst('assets/', 'Assets/')
+                      : data.imagePath.replaceFirst('Assets/', 'assets/');
+                  return Image.asset(
+                    altPath,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.purple.shade900,
+                        child: Center(
+                          child: Icon(
+                            Icons.sports_esports_rounded,
+                            size: 60,
+                            color: data.accentColor,
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
               ),

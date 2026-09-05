@@ -628,7 +628,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
                   data: const GameCardData(
                     title: '7 Up Down (Dice)',
                     category: 'Dice • HOT 🔥',
-                    imagePath: 'assets/images/7updown.png',
+                    imagePath: 'Assets/images/7updown.png',
                     playersOnline: '4,520 playing',
                     accentColor: Color(0xFF00E676),
                   ),
@@ -638,7 +638,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
                   data: const GameCardData(
                     title: 'Dragon Vs Tiger',
                     category: 'Cards • NEW 🚀',
-                    imagePath: 'assets/images/dtgame.png',
+                    imagePath: 'Assets/images/dtgame.png',
                     playersOnline: '3,120 playing',
                     accentColor: Color(0xFFFF1744),
                   ),
@@ -648,7 +648,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
                   data: const GameCardData(
                     title: 'Fruit Slice Ninja',
                     category: 'Arcade • HTML5',
-                    imagePath: 'assets/images/promo.jpg',
+                    imagePath: 'Assets/images/promo.jpg',
                     playersOnline: '1,420 playing',
                     accentColor: Color(0xFF00E676),
                   ),
@@ -658,7 +658,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
                   data: const GameCardData(
                     title: 'Ludo Express',
                     category: 'Board • HTML5',
-                    imagePath: 'assets/images/ludo.jpg',
+                    imagePath: 'Assets/images/ludo.jpg',
                     playersOnline: '3,890 playing',
                     accentColor: Color(0xFFFFB300),
                   ),
@@ -668,7 +668,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
                   data: const GameCardData(
                     title: 'Call Break Pro',
                     category: 'Cards • HTML5',
-                    imagePath: 'assets/images/rummy.jpg',
+                    imagePath: 'Assets/images/rummy.jpg',
                     playersOnline: '890 playing',
                     accentColor: Color(0xFFE040FB),
                   ),
@@ -678,7 +678,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
                   data: const GameCardData(
                     title: 'Carrom Clash',
                     category: 'Board • HTML5',
-                    imagePath: 'assets/images/dtgame.png',
+                    imagePath: 'Assets/images/dtgame.png',
                     playersOnline: '2,150 playing',
                     accentColor: Color(0xFF00B0FF),
                   ),
