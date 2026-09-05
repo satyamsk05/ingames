@@ -565,8 +565,8 @@ class _Html5GameScreenState extends State<Html5GameScreen> {
                 children: [
                   if (_hasWebError)
                     NetworkErrorWidget(
-                      customMessage:
-                          'Failed to load ${widget.gameTitle}. Please check your internet connection and tap Retry Connection.',
+                      customTitle: "Couldn't Load",
+                      customMessage: 'There was a problem trying to load the screen',
                       onRetry: () {
                         setState(() {
                           _hasWebError = false;
