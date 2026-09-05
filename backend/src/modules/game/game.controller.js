@@ -1,38 +1,56 @@
+const db = require('../../config/db');
+const ApiResponse = require('../../core/api_response');
+const SevenUpDownService = require('./seven_up_down.service');
+
+const activeGames = [
+  {
+    id: 'game_7_up_down',
+    title: '7 Up Down (Dice)',
+    category: 'Dice',
+    entryFee: 10.0,
+    prizePool: 20.0,
+    icon: 'assets/nav_icon/nav_game.png',
+    gameUrl: '/games/seven_up_down/index.html',
+    badge: 'HOT 🔥',
+    activePlayers: 4520,
+  },
+];
+
+class GameController {
+  static async getGames(req, res) {
+    return ApiResponse.success(res, activeGames);
+  }
+
+  static async get7UpDownRound(req, res) {
+    const round = SevenUpDownService.getCurrentRound();
+    const now = new Date();
+    const closeAt = new Date(round.betting_close_at);
+    const remainingMs = Math.max(0, closeAt.getTime() - now.getTime());
+    const timeRemainingSeconds = Math.floor(remainingMs / 1000);
+
+    return ApiResponse.success(res, {
+      roundId: round.id,
+      roundNumber: round.round_number,
+      status: round.status,
+      seedHash: round.seed_hash,
+      fairnessVersion: round.fairness_version || 1,
+      timeRemainingSeconds,
+      remainingMs,
+      bettingOpenAt: round.betting_open_at,
+      bettingCloseAt: round.betting_close_at,
+      serverSeed: round.status === 'FINISHED' ? round.server_seed : null,
+    });
+  }
+
   static async joinGameAndPlaceBet(req, res) {
     const userId = req.user?.id;
     if (!userId) return ApiResponse.error(res, 'UNAUTHORIZED', 'User session required', 401);
 
-    const { roundId, betType, stakeAmount, idempotencyKey } = req.body || {};
-    if (!idempotencyKey || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(idempotencyKey))) {
-      return ApiResponse.error(res, 'IDEMPOTENCY_KEY_REQUIRED', 'A valid idempotency key is required', 400);
-    }
-
-    const stake = typeof stakeAmount === 'number' ? stakeAmount : Number(stakeAmount);
-    if (!Number.isFinite(stake) || stake < 10 || stake > 500) {
-      return ApiResponse.error(res, 'INVALID_STAKE_AMOUNT', 'Stake must be between ₹10 and ₹500', 400);
-    }
+    const { roundId, betType, stakeAmount, idempotencyKey } = req.body;
+    const stake = parseFloat(stakeAmount) || 10.0;
     const stakePaise = Math.round(stake * 100);
-    if (!Number.isSafeInteger(stakePaise)) {
-      return ApiResponse.error(res, 'INVALID_STAKE_AMOUNT', 'Invalid stake amount', 400);
-    }
 
     try {
-      const existing = db.prepare('SELECT * FROM bets WHERE user_id = ? AND idempotency_key = ?').get(userId, idempotencyKey);
-      if (existing) {
-        if (existing.stake_amount_paise !== stakePaise) {
-          return ApiResponse.error(res, 'IDEMPOTENCY_KEY_REUSE', 'Idempotency key reused for a different bet', 400);
-        }
-        const wallet = require('./../wallet/ledger.service').getWalletSummary(userId);
-        return ApiResponse.success(res, {
-          betId: existing.id,
-          roundId: existing.round_id,
-          betType: existing.bet_type,
-          stakeAmount: existing.stake_amount_paise / 100,
-          status: existing.status,
-          wallet,
-        });
-      }
-
       const activeRound = roundId || SevenUpDownService.getCurrentRound().id;
       const result = SevenUpDownService.placeBet({
         userId,
@@ -50,12 +68,42 @@
       if (err.message === 'IDEMPOTENCY_KEY_REUSE') {
         return ApiResponse.error(res, 'IDEMPOTENCY_KEY_REUSE', 'Idempotency key reused for different bet amount', 400);
       }
-      if (err.message === 'ROUND_EXPIRED' || err.message === 'BETTING_CLOSED') {
-        return ApiResponse.error(res, err.message, 'Betting is closed for this round', 409);
-      }
-      if (err.message === 'MIN_BET_AMOUNT_RS_10') {
-        return ApiResponse.error(res, 'INVALID_STAKE_AMOUNT', 'Stake must be at least ₹10', 400);
-      }
       return ApiResponse.error(res, 'BET_FAILED', err.message, 400);
     }
   }
+
+  static async getBetHistory(req, res) {
+    const userId = req.user?.id;
+    if (!userId) return ApiResponse.error(res, 'UNAUTHORIZED', 'User session required', 401);
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    const rows = db.prepare(`
+      SELECT b.*, r.round_number, r.result_dice_1, r.result_dice_2, r.result_sum
+      FROM bets b
+      LEFT JOIN game_rounds r ON b.round_id = r.id
+      WHERE b.user_id = ?
+      ORDER BY b.created_at DESC
+      LIMIT ? OFFSET ?
+    `).all(userId, limit, offset);
+
+    const formatted = rows.map(r => ({
+      id: r.id,
+      roundId: r.round_id,
+      roundNumber: r.round_number,
+      gameTitle: '7 Up Down',
+      betType: r.bet_type,
+      stakeAmount: r.stake_amount_paise / 100,
+      payoutAmount: r.payout_amount_paise / 100,
+      status: r.status,
+      diceResult: r.result_sum ? `Dice ${r.result_dice_1}+${r.result_dice_2}=${r.result_sum}` : 'Pending',
+      timestamp: r.created_at,
+    }));
+
+    return ApiResponse.success(res, formatted);
+  }
+}
+
+module.exports = GameController;
