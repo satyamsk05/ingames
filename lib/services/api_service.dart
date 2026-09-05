@@ -39,6 +39,10 @@ class ApiService {
   }
   static Future<List<dynamic>?> getBanners() async => null;
   static Future<List<dynamic>?> getBetHistory({int page = 1, int limit = 20}) async {
-    try { return (await ApiClient.get('/games/bet-history?page=$page&limit=$limit')) as List<dynamic>; } catch (_) { return null; }
+    try {
+      final res = await ApiClient.get('/games/bet-history?page=$page&limit=$limit');
+      if (res is Map<String, dynamic>) return res['items'] as List<dynamic>? ?? <dynamic>[];
+      return res as List<dynamic>;
+    } catch (_) { return null; }
   }
 }
