@@ -11,7 +11,7 @@ export class PlayersPanel {
         <!-- Player 1 (Crown Winner) -->
         <div class="player-stack-item">
           <div class="avatar-crown-wrap">
-            <img src="/assets/avatar/avatar_1.png" class="stack-avatar avatar-top" onerror="this.src='/Assets/Avatar/avatar_1.png'" />
+            <img src="/avatars/avatar_1.png" class="stack-avatar avatar-top" onerror="this.src='/avatars/avatar_1.png'" />
             <span class="crown-badge">👑</span>
           </div>
           <div class="stack-coin-row">
@@ -24,7 +24,7 @@ export class PlayersPanel {
         <!-- Player 2 -->
         <div class="player-stack-item">
           <div class="avatar-crown-wrap">
-            <img src="/assets/avatar/avatar_2.png" class="stack-avatar avatar-cyan" onerror="this.src='/Assets/Avatar/avatar_2.png'" />
+            <img src="/avatars/avatar_2.png" class="stack-avatar avatar-cyan" onerror="this.src='/avatars/avatar_2.png'" />
           </div>
           <div class="stack-coin-row">
             <span class="stack-amt">₹263.02</span>
@@ -36,7 +36,7 @@ export class PlayersPanel {
         <!-- Player 3 -->
         <div class="player-stack-item">
           <div class="avatar-crown-wrap">
-            <img src="/assets/avatar/avatar_3.png" class="stack-avatar avatar-pink" onerror="this.src='/Assets/Avatar/avatar_3.png'" />
+            <img src="/avatars/avatar_3.png" class="stack-avatar avatar-pink" onerror="this.src='/avatars/avatar_3.png'" />
           </div>
           <div class="stack-coin-row">
             <span class="stack-amt">₹662.79</span>

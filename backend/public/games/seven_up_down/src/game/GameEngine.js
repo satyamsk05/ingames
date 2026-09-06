@@ -31,14 +31,21 @@ class GameEngine {
     apiClient.getUserProfile()
       .then(res => {
         if (res && res.data) {
-          if (res.data.totalBalance !== undefined) {
-            gameState.setBalance(res.data.totalBalance);
-          }
-          const name = res.data.username || res.data.phoneNumber || 'Player';
+          const profile = res.data.profile || res.data;
+          const balance = profile.balance !== undefined ? profile.balance : (profile.totalBalance !== undefined ? profile.totalBalance : 0);
+          gameState.setBalance(balance);
+          
+          const name = profile.username || profile.phoneNumber || 'Player';
           const userNameEl = document.getElementById('userNameText');
           if (userNameEl) {
             userNameEl.innerText = name;
           }
+
+          const avatarUrl = profile.avatarUrl || profile.avatar_path || '/avatars/avatar_1.png';
+          const avatarEls = document.querySelectorAll('.user-avatar-circle');
+          avatarEls.forEach(el => {
+            el.src = avatarUrl.startsWith('/') ? avatarUrl : '/avatars/' + avatarUrl.split('/').pop();
+          });
         }
       })
       .catch(() => {});

@@ -8,6 +8,17 @@ export class DiceView {
   }
 
   init() {
+    eventBus.on('ROUND_CREATED', () => {
+      if (this.dice1El) {
+        this.dice1El.classList.remove('rolling');
+        this.dice1El.innerText = '?';
+      }
+      if (this.dice2El) {
+        this.dice2El.classList.remove('rolling');
+        this.dice2El.innerText = '?';
+      }
+    });
+
     eventBus.on('DICE_ROLL_START', () => {
       if (this.dice1El) this.dice1El.classList.add('rolling');
       if (this.dice2El) this.dice2El.classList.add('rolling');
