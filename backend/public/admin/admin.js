@@ -18,36 +18,36 @@ function showLogin() {
 function showApp() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appContainer').style.display = 'flex';
-  loadTab(currentTab);
+  switchTab(currentTab);
 }
 
-async function handleLogin(e) {
+function handleLogin(e) {
   e.preventDefault();
   const username = document.getElementById('adminUser').value;
   const password = document.getElementById('adminPass').value;
   const errDiv = document.getElementById('loginError');
   errDiv.style.display = 'none';
 
-  try {
-    const res = await fetch('/api/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-
-    const json = await res.json();
+  fetch('/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+  .then(res => res.json())
+  .then(json => {
     if (json.success && json.data && json.data.token) {
       adminToken = json.data.token;
       localStorage.setItem('ingames_admin_token', adminToken);
       showApp();
     } else {
-      errDiv.innerText = json.error?.message || 'Login failed';
+      errDiv.innerText = json.error?.message || json.message || 'Invalid admin credentials';
       errDiv.style.display = 'block';
     }
-  } catch (err) {
-    errDiv.innerText = 'Network error connecting to backend';
+  })
+  .catch(() => {
+    errDiv.innerText = 'Unable to connect to server backend';
     errDiv.style.display = 'block';
-  }
+  });
 }
 
 function handleLogout() {
@@ -58,20 +58,23 @@ function handleLogout() {
 
 function switchTab(tabName) {
   currentTab = tabName;
+  
+  // Update sidebar active buttons
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.tab-page').forEach(el => el.style.display = 'none');
-
-  const activeBtn = document.querySelector(`.nav-item[onclick="switchTab('${tabName}')"]`);
+  const activeBtn = document.getElementById(`nav-${tabName}`);
   if (activeBtn) activeBtn.classList.add('active');
 
+  // Show selected tab page
+  document.querySelectorAll('.tab-page').forEach(el => el.style.display = 'none');
   const page = document.getElementById(`tab-${tabName}`);
   if (page) page.style.display = 'block';
 
+  // Update header text
   const titles = {
-    overview: ['Overview & Analytics', 'Live platform metrics & performance overview'],
-    users: ['Users & Balances', 'Manage player accounts, adjust cash & block fraud users'],
-    withdrawals: ['Payouts & Withdrawals', 'Manage pending UPI withdrawal approval requests'],
-    games: ['Game Control & Config', 'Enable/disable games and set bet limits'],
+    overview: ['Overview & Analytics', 'Real-time gaming platform performance summary'],
+    users: ['Users & Wallet Accounts', 'Manage player accounts, adjust balance & account status'],
+    withdrawals: ['UPI Withdrawal Payouts', 'Review and process user cashout requests'],
+    games: ['Game Config & Status', 'Live game availability and bet limits control'],
   };
 
   if (titles[tabName]) {
@@ -112,9 +115,9 @@ async function loadOverview() {
     if (json.success && json.data) {
       const d = json.data;
       document.getElementById('statUsers').innerText = d.totalUsers || 0;
-      document.getElementById('statDeposits').innerText = `₹${(d.totalDeposits || 0).toLocaleString()}`;
-      document.getElementById('statWithdrawals').innerText = `₹${(d.totalWithdrawals || 0).toLocaleString()}`;
-      document.getElementById('statProfit').innerText = `₹${(d.netProfit || 0).toLocaleString()}`;
+      document.getElementById('statDeposits').innerText = `₹${(d.totalDeposits || 0).toLocaleString('en-IN')}`;
+      document.getElementById('statWithdrawals').innerText = `₹${(d.totalWithdrawals || 0).toLocaleString('en-IN')}`;
+      document.getElementById('statProfit').innerText = `₹${(d.netProfit || 0).toLocaleString('en-IN')}`;
     }
   } catch (_) {}
 }
@@ -127,38 +130,41 @@ async function loadUsers() {
       cachedUsers = json.data;
       renderUsersTable(cachedUsers);
     } else {
-      tbody.innerHTML = '<tr><td colspan="8" class="text-center">No users found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="table-empty">No users registered in database.</td></tr>';
     }
   } catch (_) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-red">Failed to load users.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="table-empty text-orange">Unable to load users data.</td></tr>';
   }
 }
 
 function renderUsersTable(users) {
   const tbody = document.getElementById('usersTableBody');
-  if (users.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center">No users found.</td></tr>';
+  if (!users || users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="table-empty">No matching users found.</td></tr>';
     return;
   }
 
   tbody.innerHTML = users.map(u => `
     <tr>
       <td>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <img src="${u.avatarPath}" style="width:28px; height:28px; border-radius:50%; object-fit:cover;" onerror="this.src='/avatars/avatar_1.png'" />
-          <strong>${u.username}</strong>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="avatar-sm" style="background: rgba(99, 102, 241, 0.2); color: #818cf8;">${(u.username || 'U').substring(0, 2).toUpperCase()}</div>
+          <div>
+            <strong style="color: #fff; font-weight: 600;">${u.username || 'User'}</strong>
+            <div style="font-size: 11px; color: var(--text-dim);">ID: ${u.id.substring(0, 8)}...</div>
+          </div>
         </div>
       </td>
-      <td>${u.phone}</td>
-      <td><strong style="color:#00e676;">₹${(u.wallet.totalBalance || 0).toFixed(2)}</strong></td>
-      <td>₹${(u.wallet.cashBalance || 0).toFixed(2)}</td>
-      <td>₹${(u.wallet.winningsBalance || 0).toFixed(2)}</td>
-      <td>₹${(u.wallet.bonusBalance || 0).toFixed(2)}</td>
+      <td><span style="font-family: monospace; font-weight: 600;">${u.phone}</span></td>
+      <td><strong style="color:#10b981; font-size: 14px;">₹${(u.wallet?.totalBalance || 0).toLocaleString('en-IN')}</strong></td>
+      <td>₹${(u.wallet?.cashBalance || 0).toLocaleString('en-IN')}</td>
+      <td>₹${(u.wallet?.winningsBalance || 0).toLocaleString('en-IN')}</td>
+      <td>₹${(u.wallet?.bonusBalance || 0).toLocaleString('en-IN')}</td>
       <td>
-        <span class="stat-badge ${u.isBlocked ? 'red' : 'green'}">${u.isBlocked ? 'BLOCKED' : 'ACTIVE'}</span>
+        <span class="badge-status ${u.isBlocked ? 'red' : 'green'}">${u.isBlocked ? 'Blocked' : 'Active'}</span>
       </td>
-      <td>
-        <button class="btn-action-sm purple" onclick="openBalanceModal('${u.id}', '${u.username}')">💰 Adjust Cash</button>
+      <td style="text-align: right;">
+        <button class="btn-action-sm purple" onclick="openBalanceModal('${u.id}', '${u.username || u.phone}')">💳 Balance</button>
         <button class="btn-action-sm ${u.isBlocked ? 'green' : 'red'}" onclick="toggleUserBlock('${u.id}', ${!u.isBlocked})">
           ${u.isBlocked ? 'Unblock' : 'Block'}
         </button>
@@ -170,7 +176,9 @@ function renderUsersTable(users) {
 function filterUsers() {
   const query = document.getElementById('userSearch').value.toLowerCase();
   const filtered = cachedUsers.filter(u => 
-    u.username.toLowerCase().includes(query) || u.phone.includes(query)
+    (u.username && u.username.toLowerCase().includes(query)) || 
+    (u.phone && u.phone.includes(query)) ||
+    (u.id && u.id.toLowerCase().includes(query))
   );
   renderUsersTable(filtered);
 }
@@ -204,17 +212,17 @@ async function submitBalanceUpdate(e) {
     if (json.success) {
       closeBalanceModal();
       loadUsers();
-      alert('User balance updated successfully!');
+      loadOverview();
     } else {
-      alert(json.error?.message || 'Failed to update balance');
+      alert(json.error?.message || json.message || 'Failed to update balance');
     }
   } catch (err) {
-    alert('Failed to update balance');
+    alert('Error updating user balance');
   }
 }
 
 async function toggleUserBlock(userId, isBlocked) {
-  if (!confirm(`Are you sure you want to ${isBlocked ? 'BLOCK' : 'UNBLOCK'} this user?`)) return;
+  if (!confirm(`Confirm action: ${isBlocked ? 'BLOCK' : 'UNBLOCK'} user?`)) return;
 
   try {
     const json = await apiFetch('/api/admin/users/toggle-block', {
@@ -234,45 +242,48 @@ async function loadWithdrawals() {
     const json = await apiFetch('/api/admin/withdrawals');
     if (json.success && Array.isArray(json.data)) {
       if (json.data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center">No pending withdrawal requests.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="table-empty">No pending withdrawal requests.</td></tr>';
         return;
       }
 
       tbody.innerHTML = json.data.map(w => `
         <tr>
-          <td><code>${w.id}</code></td>
-          <td>${w.user_id}</td>
-          <td><strong>${w.upi_id || 'N/A'}</strong></td>
-          <td><strong style="color:#ff9800;">₹${w.amount}</strong></td>
-          <td><span class="stat-badge ${w.status === 'APPROVED' ? 'green' : (w.status === 'REJECTED' ? 'red' : 'orange')}">${w.status}</span></td>
+          <td><code style="background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px;">${w.id.substring(0, 8)}</code></td>
+          <td><span style="font-weight: 600;">${w.user_id}</span></td>
+          <td><strong style="color: #60a5fa;">${w.upi_id || 'N/A'}</strong></td>
+          <td><strong style="color: #f59e0b; font-size: 14px;">₹${(w.amount || 0).toLocaleString('en-IN')}</strong></td>
+          <td><span class="badge-status ${w.status === 'APPROVED' ? 'green' : (w.status === 'REJECTED' ? 'red' : 'orange')}">${w.status}</span></td>
           <td>${new Date(w.created_at).toLocaleString()}</td>
-          <td>
+          <td style="text-align: right;">
             ${w.status === 'PENDING' ? `
-              <button class="btn-action-sm green" onclick="approveWithdrawal('${w.id}')">✓ Approve</button>
-              <button class="btn-action-sm red" onclick="rejectWithdrawal('${w.id}')">✕ Reject</button>
-            ` : '-'}
+              <button class="btn-action-sm green" onclick="approveWithdrawal('${w.id}')">Approve</button>
+              <button class="btn-action-sm red" onclick="rejectWithdrawal('${w.id}')">Reject</button>
+            ` : '<span style="color: var(--text-dim); font-size: 12px;">Processed</span>'}
           </td>
         </tr>
       `).join('');
     }
   } catch (_) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Failed to load requests.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Failed to load withdrawal requests.</td></tr>';
   }
 }
 
 async function approveWithdrawal(requestId) {
-  if (!confirm('Approve this withdrawal payout request?')) return;
+  if (!confirm('Approve this withdrawal cashout payout?')) return;
   try {
     const json = await apiFetch('/api/admin/withdrawals/approve', {
       method: 'POST',
       body: JSON.stringify({ requestId }),
     });
-    if (json.success) loadWithdrawals();
+    if (json.success) {
+      loadWithdrawals();
+      loadOverview();
+    }
   } catch (_) {}
 }
 
 async function rejectWithdrawal(requestId) {
-  const reason = prompt('Enter rejection reason (User will be refunded):', 'Details invalid');
+  const reason = prompt('Reason for rejection (Amount will be refunded to user):', 'UPI details mismatch');
   if (!reason) return;
 
   try {
@@ -280,7 +291,10 @@ async function rejectWithdrawal(requestId) {
       method: 'POST',
       body: JSON.stringify({ requestId, reason }),
     });
-    if (json.success) loadWithdrawals();
+    if (json.success) {
+      loadWithdrawals();
+      loadOverview();
+    }
   } catch (_) {}
 }
 
@@ -291,18 +305,58 @@ async function loadGames() {
     if (json.success && Array.isArray(json.data)) {
       grid.innerHTML = json.data.map(g => `
         <div class="game-config-card">
-          <div class="game-info">
-            <img src="${g.imagePath}" class="game-img" />
-            <div>
-              <h4 style="font-size:16px;">${g.title}</h4>
-              <span class="stat-badge ${g.isAvailable ? 'green' : 'orange'}">${g.isAvailable ? 'ACTIVE' : 'DISABLED'}</span>
+          <div class="game-card-top">
+            <div class="game-info">
+              <div class="game-icon-box">🎲</div>
+              <div>
+                <div class="game-title">${g.title || g.gameId}</div>
+                <div class="game-id">ID: ${g.gameId}</div>
+              </div>
+            </div>
+            <span class="badge-status ${g.isAvailable ? 'green' : 'orange'}">
+              ${g.isAvailable ? 'Active' : 'Maintenance'}
+            </span>
+          </div>
+
+          <div class="bet-inputs-row">
+            <div class="bet-input-wrap">
+              <label>Min Bet (₹)</label>
+              <input type="number" id="minBet_${g.gameId}" value="${g.minBet || 10}" />
+            </div>
+            <div class="bet-input-wrap">
+              <label>Max Bet (₹)</label>
+              <input type="number" id="maxBet_${g.gameId}" value="${g.maxBet || 10000}" />
             </div>
           </div>
-          <div>
-            <span style="font-size:12px; color:#aaa;">Status: Active</span>
+
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button class="btn-secondary" style="flex:1; font-size:12px; padding:6px;" onclick="updateGameConfig('${g.gameId}', ${!g.isAvailable})">
+              ${g.isAvailable ? 'Disable' : 'Enable'}
+            </button>
+            <button class="btn-primary" style="flex:1; font-size:12px; padding:6px;" onclick="saveGameBetLimits('${g.gameId}', ${g.isAvailable})">
+              Save Limits
+            </button>
           </div>
         </div>
       `).join('');
     }
+  } catch (_) {
+    grid.innerHTML = '<div style="color:var(--text-muted);">Failed to load game configurations.</div>';
+  }
+}
+
+async function updateGameConfig(gameId, isAvailable) {
+  const minBet = parseFloat(document.getElementById(`minBet_${gameId}`).value) || 10;
+  const maxBet = parseFloat(document.getElementById(`maxBet_${gameId}`).value) || 10000;
+  try {
+    const json = await apiFetch(`/api/admin/games/configs/${gameId}`, {
+      method: 'POST',
+      body: JSON.stringify({ isAvailable, minBet, maxBet }),
+    });
+    if (json.success) loadGames();
   } catch (_) {}
+}
+
+async function saveGameBetLimits(gameId, currentAvailability) {
+  updateGameConfig(gameId, currentAvailability);
 }
