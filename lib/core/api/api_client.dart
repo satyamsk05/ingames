@@ -44,18 +44,27 @@ class ApiClient {
     }
   }
 
-  static Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
+  static Future<dynamic> post(
+    String endpoint,
+    Map<String, dynamic> body, {
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
     final uri = Uri.parse('$serverBaseUrl$endpoint');
     try {
-      final response = await http.post(
-        uri,
-        headers: _headers,
-        body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 12));
+      final response = await http
+          .post(
+            uri,
+            headers: _headers,
+            body: jsonEncode(body),
+          )
+          .timeout(timeout);
       return _handleResponse(response);
     } catch (e) {
       if (e is ApiException) rethrow;
-      throw ApiException(code: 'NETWORK_ERROR', message: 'Network connection failed: ${e.toString()}', statusCode: 0);
+      throw ApiException(
+          code: 'NETWORK_ERROR',
+          message: 'Network connection failed: ${e.toString()}',
+          statusCode: 0);
     }
   }
 

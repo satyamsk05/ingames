@@ -21,11 +21,14 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   int _currentStep = 0; // 0: GetStarted, 1: Phone, 2: Verifying, 3: Age, 4: Name, 5: Welcome
   bool _isLoading = false;
+  bool _isVerifyingActive = false;
   String? _errorMessage;
   String? _statusMessage;
+  String? _currentLogginToken;
+  String? _currentLogginLink;
 
   final TextEditingController _phoneController = TextEditingController(text: '9876543210');
   final TextEditingController _nameController = TextEditingController(text: 'Player');
@@ -34,10 +37,24 @@ class _LoginScreenState extends State<LoginScreen> {
   Map<String, dynamic> _sessionData = {};
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _phoneController.dispose();
     _nameController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _currentStep == 2 && !_isVerifyingActive && _currentLogginToken != null) {
+      _startVerificationLoop();
+    }
   }
 
   void _handleSkipLogin() async {
@@ -96,6 +113,9 @@ class _LoginScreenState extends State<LoginScreen> {
         throw Exception('Failed to generate WhatsApp verification link.');
       }
 
+      _currentLogginToken = logginToken;
+      _currentLogginLink = link;
+
       if (mounted) {
         setState(() {
           _statusMessage = 'Opening WhatsApp...';
@@ -103,15 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       // 2. Open pre-filled WhatsApp message
-      final uri = Uri.parse(link);
-      bool launched = false;
-      try {
-        launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } catch (_) {}
-
-      if (!launched) {
-        launched = await launchUrl(uri, mode: LaunchMode.platformDefault);
-      }
+      await _reopenWhatsApp();
 
       if (mounted) {
         setState(() {
@@ -120,44 +132,96 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
 
-      // 3. Server waits for verification identity via Loggin waitForVerify
-      final verifyRes = await AuthApi.verifyLogginToken(logginToken);
-      final appToken = verifyRes['token']?.toString() ?? '';
-      final user = verifyRes['user'] as Map<String, dynamic>? ?? {};
-
-      _sessionData = verifyRes;
-
-      // 4. Save InGames user session locally
-      await TokenManager.saveSession(
-        token: appToken,
-        userId: user['id']?.toString() ?? '',
-        username: user['username']?.toString(),
-        phone: user['phone']?.toString(),
-        avatarPath: user['avatarPath']?.toString(),
-      );
-
-      if (user['username'] != null && user['username'].toString().isNotEmpty) {
-        _nameController.text = user['username'].toString();
-      } else {
-        _nameController.text = 'Player';
-      }
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _statusMessage = null;
-          _currentStep = 3; // Move to Enter Age Screen
-        });
-      }
+      // 3. Start resilient verification loop
+      _startVerificationLoop();
     } catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
           _statusMessage = null;
           _currentStep = 1; // Stay on phone screen on error
-          _errorMessage = e is ApiException ? e.message : 'WhatsApp verification failed. Please try again.';
+          _errorMessage = e is ApiException ? e.message : 'Failed to launch WhatsApp. Please check internet connection.';
         });
       }
+    }
+  }
+
+  Future<void> _reopenWhatsApp() async {
+    final link = _currentLogginLink;
+    if (link == null || link.isEmpty) return;
+    final uri = Uri.parse(link);
+    bool launched = false;
+    try {
+      launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+    if (!launched) {
+      await launchUrl(uri, mode: LaunchMode.platformDefault);
+    }
+  }
+
+  Future<void> _startVerificationLoop() async {
+    final token = _currentLogginToken;
+    if (token == null || token.isEmpty || _isVerifyingActive) return;
+
+    _isVerifyingActive = true;
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+        _statusMessage = 'Verifying WhatsApp message...';
+      });
+    }
+
+    int attempts = 0;
+    const maxAttempts = 30; // Try up to ~75 seconds
+
+    while (attempts < maxAttempts && mounted && _currentStep == 2) {
+      attempts++;
+      try {
+        final verifyRes = await AuthApi.verifyLogginToken(token, timeout: const Duration(seconds: 12));
+        final appToken = verifyRes['token']?.toString() ?? '';
+        final user = verifyRes['user'] as Map<String, dynamic>? ?? {};
+
+        if (appToken.isNotEmpty) {
+          _sessionData = verifyRes;
+
+          // Save InGames user session locally
+          await TokenManager.saveSession(
+            token: appToken,
+            userId: user['id']?.toString() ?? '',
+            username: user['username']?.toString(),
+            phone: user['phone']?.toString(),
+            avatarPath: user['avatarPath']?.toString(),
+          );
+
+          if (user['username'] != null && user['username'].toString().isNotEmpty) {
+            _nameController.text = user['username'].toString();
+          } else {
+            _nameController.text = 'Player';
+          }
+
+          if (mounted) {
+            setState(() {
+              _isVerifyingActive = false;
+              _isLoading = false;
+              _statusMessage = null;
+              _currentStep = 3; // Move to Enter Age Screen
+            });
+          }
+          return;
+        }
+      } catch (e) {
+        // If user hasn't sent message yet or socket reset, retry silently while on step 2
+        await Future.delayed(const Duration(milliseconds: 1500));
+      }
+    }
+
+    _isVerifyingActive = false;
+    if (mounted && _currentStep == 2) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = 'Waiting for message... Tap below if you have already sent it.';
+      });
     }
   }
 
@@ -538,15 +602,15 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         const Spacer(),
         Container(
-          width: 80,
-          height: 80,
+          width: 84,
+          height: 84,
           decoration: BoxDecoration(
             color: const Color(0xFF25D366).withValues(alpha: 0.15),
             shape: BoxShape.circle,
             border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.4), width: 2),
           ),
           child: Center(
-            child: _buildWhatsAppIcon(size: 40),
+            child: _buildWhatsAppIcon(size: 44),
           ),
         ),
         const SizedBox(height: 24),
@@ -554,15 +618,15 @@ class _LoginScreenState extends State<LoginScreen> {
           'Verifying WhatsApp...',
           style: GoogleFonts.poppins(
             color: Colors.white,
-            fontSize: 22,
+            fontSize: 24,
             fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(height: 8),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40.0),
+          padding: const EdgeInsets.symmetric(horizontal: 36.0),
           child: Text(
-            _statusMessage ?? 'Please send the pre-filled message in WhatsApp to verify your account.',
+            _statusMessage ?? 'Please send the pre-filled message in WhatsApp. As soon as you return, your account will be verified automatically.',
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               color: Colors.white60,
@@ -571,16 +635,72 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
         const SizedBox(
-          width: 32,
-          height: 32,
+          width: 28,
+          height: 28,
           child: CircularProgressIndicator(
             color: Color(0xFF25D366),
             strokeWidth: 3,
           ),
         ),
         const Spacer(),
+
+        // Bottom Action Buttons
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+          child: Column(
+            children: [
+              GestureDetector(
+                onTap: _isLoading ? null : () => _startVerificationLoop(),
+                child: Container(
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(27),
+                  ),
+                  child: Center(
+                    child: Text(
+                      "I've Sent the Message",
+                      style: GoogleFonts.poppins(
+                        color: Colors.black,
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: _reopenWhatsApp,
+                child: Container(
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(color: const Color(0xFF25D366), width: 1.5),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildWhatsAppIcon(size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Re-open WhatsApp',
+                        style: GoogleFonts.poppins(
+                          color: const Color(0xFF25D366),
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
