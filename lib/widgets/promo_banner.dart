@@ -16,7 +16,7 @@ class PromoBanner extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 165,
+        height: 175,
         margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -47,65 +47,74 @@ class PromoBanner extends StatelessWidget {
               // Left Column: DEPOSIT Tag, Text Content & Clean DEPOSIT NOW Outlined Button
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // DEPOSIT Tag
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF4F106D),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: const Color(0xFFCAA772).withValues(alpha: 0.5),
-                                width: 1,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // DEPOSIT Tag
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF4F106D),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: const Color(0xFFCAA772).withValues(alpha: 0.5),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                'DEPOSIT',
+                                style: GoogleFonts.poppins(
+                                  color: const Color(0xFFCAA772),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
-                            child: Text(
-                              'DEPOSIT',
+                            const SizedBox(height: 4),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'DEPOSIT BONUS\n180% BONUS',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w900,
+                                  height: 1.15,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'DEPOSIT -> GET BONUS',
                               style: GoogleFonts.poppins(
                                 color: const Color(0xFFCAA772),
                                 fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.2,
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'DEPOSIT BONUS\n180% BONUS',
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w900,
-                              height: 1.15,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'DEPOSIT -> GET BONUS',
-                            style: GoogleFonts.poppins(
-                              color: const Color(0xFFCAA772),
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
 
-                      // Clean DEPOSIT NOW Action Button (No white background, green theme gradient)
+                      const SizedBox(height: 6),
+
+                      // Clean DEPOSIT NOW Action Button
                       Container(
-                        width: 140,
-                        height: 34,
+                        width: 135,
+                        height: 32,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             begin: Alignment.topCenter,
@@ -143,16 +152,16 @@ class PromoBanner extends StatelessWidget {
 
               // Right Side Banner Image Graphic (banner.png)
               Padding(
-                padding: const EdgeInsets.only(top: 6, bottom: 6, right: 6),
+                padding: const EdgeInsets.only(top: 4, bottom: 4, right: 6),
                 child: Image.network(
                   '${ApiService.serverDomain}/banners/banner.png',
-                  height: 153,
+                  height: 160,
                   fit: BoxFit.contain,
                   alignment: Alignment.centerRight,
                   errorBuilder: (context, error, stackTrace) {
                     return Image.asset(
                       'banner.png',
-                      height: 153,
+                      height: 160,
                       fit: BoxFit.contain,
                       alignment: Alignment.centerRight,
                     );
