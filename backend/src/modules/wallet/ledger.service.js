@@ -358,6 +358,79 @@ class LedgerService {
 
     return executeTransaction();
   }
+
+  /**
+   * Admin manual balance adjustment (Credit or Debit)
+   */
+  static adminAdjustBalance({ userId, amount, action, type, note }) {
+    if (!userId || !amount || amount <= 0) {
+      throw new Error('INVALID_AMOUNT');
+    }
+    const amountPaise = Math.round(amount * 100);
+    const category = (type || 'DEPOSIT').toUpperCase(); // DEPOSIT, WINNINGS, BONUS
+    const isCredit = action !== 'DEDUCT';
+
+    const executeTransaction = db.transaction(() => {
+      const wallet = this.getOrCreateWallet(userId);
+      const balanceBefore = wallet.cash_balance_paise + wallet.winnings_balance_paise + wallet.bonus_balance_paise;
+      
+      let newCash = wallet.cash_balance_paise;
+      let newWinnings = wallet.winnings_balance_paise;
+      let newBonus = wallet.bonus_balance_paise;
+
+      let deltaCash = 0;
+      let deltaWinnings = 0;
+      let deltaBonus = 0;
+
+      if (category === 'WINNINGS') {
+        deltaWinnings = isCredit ? amountPaise : -amountPaise;
+        newWinnings = Math.max(0, newWinnings + deltaWinnings);
+      } else if (category === 'BONUS') {
+        deltaBonus = isCredit ? amountPaise : -amountPaise;
+        newBonus = Math.max(0, newBonus + deltaBonus);
+      } else { // DEPOSIT / CASH
+        deltaCash = isCredit ? amountPaise : -amountPaise;
+        newCash = Math.max(0, newCash + deltaCash);
+      }
+
+      const balanceAfter = newCash + newWinnings + newBonus;
+      const now = new Date().toISOString();
+
+      const res = db.prepare(`
+        UPDATE wallets 
+        SET cash_balance_paise = ?, winnings_balance_paise = ?, bonus_balance_paise = ?, version = version + 1, updated_at = ?
+        WHERE id = ? AND version = ?
+      `).run(newCash, newWinnings, newBonus, now, wallet.id, wallet.version);
+
+      if (res.changes !== 1) {
+        throw new Error('WALLET_CONFLICT');
+      }
+
+      const refId = `ADMIN_ADJ_${Date.now()}`;
+      const ledgerId = 'ldg_' + crypto.randomUUID().slice(0, 12);
+      db.prepare(`
+        INSERT INTO wallet_ledger 
+        (id, user_id, wallet_id, reference_type, reference_id, idempotency_key, direction, delta_cash_paise, delta_winnings_paise, delta_bonus_paise, delta_locked_paise, amount_paise, balance_before_paise, balance_after_paise, category, metadata_json, created_at)
+        VALUES (?, ?, ?, 'ADMIN_ADJUSTMENT', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+      `).run(
+        ledgerId, userId, wallet.id, refId, refId, 
+        isCredit ? 'CREDIT' : 'DEBIT', 
+        deltaCash, deltaWinnings, deltaBonus, 
+        amountPaise, balanceBefore, balanceAfter, 
+        category, JSON.stringify({ note: note || 'Admin manual balance adjustment' }), now
+      );
+
+      const txId = 'tx_' + crypto.randomUUID().slice(0, 12);
+      db.prepare(`
+        INSERT INTO transactions (id, user_id, type, amount_paise, is_credit, title, category, reference_id, created_at)
+        VALUES (?, ?, 'ADMIN_ADJUSTMENT', ?, ?, ?, ?, ?, ?)
+      `).run(txId, userId, amountPaise, isCredit ? 1 : 0, note || `Admin ${isCredit ? 'Credit' : 'Debit'} (${category})`, category, refId, now);
+
+      return this.getWalletSummary(userId);
+    });
+
+    return executeTransaction();
+  }
 }
 
 module.exports = LedgerService;

@@ -79,8 +79,13 @@ class AdminController {
       let users = [];
       try {
         users = db.prepare('SELECT id, phone, username, avatar_path, is_blocked, created_at FROM users ORDER BY created_at DESC LIMIT 100').all();
-      } catch (_) {
-        users = [];
+      } catch (err) {
+        console.error('Error fetching users in admin controller:', err);
+        try {
+          users = db.prepare('SELECT id, phone, username, avatar_path, created_at FROM users ORDER BY created_at DESC LIMIT 100').all();
+        } catch (_) {
+          users = [];
+        }
       }
 
       const usersWithWallets = users.map(user => {
@@ -92,7 +97,7 @@ class AdminController {
 
         return {
           id: user.id,
-          phone: user.phone || 'N/A',
+          phone: user.phone || 'Guest / Unverified',
           username: user.username || `Player_${user.id.slice(-4)}`,
           avatarPath: user.avatar_path || '/avatars/avatar_1.png',
           isBlocked: !!user.is_blocked,
@@ -109,30 +114,24 @@ class AdminController {
 
   async updateUserBalance(req, res) {
     try {
-      const { userId, type, amount, note } = req.body;
+      const { userId, action, type, amount, note } = req.body;
       if (!userId || !amount || amount <= 0) {
         return ApiResponse.error(res, 'BAD_REQUEST', 'UserId and valid positive amount are required', 400);
       }
 
-      const targetType = (type || 'DEPOSIT').toUpperCase(); // DEPOSIT, WINNINGS, BONUS
-      const entryType = req.body.action === 'DEDUCT' ? 'DEBIT' : 'CREDIT';
-
-      const entry = LedgerService.recordTransaction({
+      const updatedWallet = LedgerService.adminAdjustBalance({
         userId,
         amount: parseFloat(amount),
-        type: entryType,
-        category: targetType,
-        referenceId: `ADMIN_ADJ_${Date.now()}`,
-        description: note || `Admin Manual Balance Adjustment (${entryType})`,
+        action,
+        type,
+        note,
       });
 
-      const updatedWallet = LedgerService.getWalletSummary(userId);
-
       return ApiResponse.success(res, {
-        transaction: entry,
         wallet: updatedWallet,
       }, 'User balance updated successfully');
     } catch (error) {
+      console.error('Failed to update user balance:', error);
       return ApiResponse.error(res, error.message || 'Failed to update user balance', 500);
     }
   }

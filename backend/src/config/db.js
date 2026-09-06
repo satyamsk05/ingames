@@ -63,6 +63,7 @@ function initDb() {
   try { db.exec('ALTER TABLE wallet_ledger ADD COLUMN delta_winnings_paise INTEGER DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE wallet_ledger ADD COLUMN delta_bonus_paise INTEGER DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE wallet_ledger ADD COLUMN delta_locked_paise INTEGER DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0'); } catch (_) {}
 
   try { db.exec('ALTER TABLE withdrawals ADD COLUMN fee_paise INTEGER DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE withdrawals ADD COLUMN net_amount_paise INTEGER DEFAULT 0'); } catch (_) {}
