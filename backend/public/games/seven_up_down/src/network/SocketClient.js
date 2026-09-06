@@ -13,10 +13,14 @@ class SocketClient {
         let token = null;
         try {
           const urlParams = new URLSearchParams(window.location.search);
-          token = urlParams.get('token') || localStorage.getItem('ingames_token');
-        } catch (_) {}
+          token = urlParams.get('token') || window.IN_GAMES_AUTH_TOKEN || localStorage.getItem('ingames_token');
+        } catch (_) {
+          token = window.IN_GAMES_AUTH_TOKEN || null;
+        }
 
-        this.socket = window.io({
+        const serverUrl = (window.IN_GAMES_SERVER_URL || '').replace(/\/$/, '');
+
+        this.socket = window.io(serverUrl || undefined, {
           auth: token ? { token } : {},
           transports: ['websocket', 'polling'],
           reconnection: true,

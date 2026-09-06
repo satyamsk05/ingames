@@ -85,6 +85,14 @@ class _Html5GameScreenState extends State<Html5GameScreen> with WidgetsBindingOb
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setNavigationDelegate(
           NavigationDelegate(
+            onPageStarted: (_) {
+              try {
+                _webViewController?.runJavaScript("""
+                  window.IN_GAMES_AUTH_TOKEN = '$token';
+                  window.IN_GAMES_SERVER_URL = '${ApiService.baseUrl}';
+                """);
+              } catch (_) {}
+            },
             onPageFinished: (_) {
               if (mounted) {
                 setState(() {
