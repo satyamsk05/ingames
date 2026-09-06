@@ -30,8 +30,8 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   String? _currentLogginToken;
   String? _currentLogginLink;
 
-  final TextEditingController _phoneController = TextEditingController(text: '9876543210');
-  final TextEditingController _nameController = TextEditingController(text: 'Player');
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
   int _selectedAge = 21;
 
   Map<String, dynamic> _sessionData = {};
@@ -533,7 +533,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                           letterSpacing: 1.5,
                         ),
                         decoration: const InputDecoration(
-                          hintText: '9876543210',
+                          hintText: 'Phone number',
                           hintStyle: TextStyle(color: Colors.white30),
                           border: InputBorder.none,
                         ),
