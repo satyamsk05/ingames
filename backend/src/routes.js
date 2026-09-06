@@ -5,7 +5,11 @@ const AuthController = require('./modules/auth/auth.controller');
 const WalletController = require('./modules/wallet/wallet.controller');
 const GameController = require('./modules/game/game.controller');
 const DashboardController = require('./modules/app/dashboard.controller');
+const adminRoutes = require('./modules/admin/admin.routes');
 const { authMiddleware, optionalAuthMiddleware } = require('./core/auth_middleware');
+
+// --- Admin Module Routes ---
+router.use('/admin', adminRoutes);
 
 // --- Dashboard & Config Routes ---
 router.get('/app/dashboard-header', optionalAuthMiddleware, DashboardController.getDashboardHeader);
