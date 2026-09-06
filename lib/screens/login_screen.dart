@@ -1,13 +1,11 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../core/api/api_client.dart';
 import '../core/storage/token_manager.dart';
 import '../features/auth/data/auth_api.dart';
-import '../services/api_service.dart';
-import 'html5_helper.dart';
+import '../services/supabase_service.dart';
 
 class LoginScreen extends StatefulWidget {
   final ValueChanged<Map<String, dynamic>> onLoginSuccess;
@@ -65,73 +63,42 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      if (kIsWeb) {
-        openAuth0UniversalLogin('${ApiService.serverDomain}/api/auth/auth0/google-login');
-        setState(() {
-          _isLoading = false;
-        });
+      // 1. Attempt Supabase Google OAuth
+      final supabaseOAuthStarted = await SupabaseService.signInWithGoogle();
+      if (supabaseOAuthStarted) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
         return;
       }
 
-      final loginUrl = '${ApiService.serverDomain}/api/auth/auth0/google-login';
-      final Map<String, dynamic>? result = await Navigator.push<Map<String, dynamic>>(
-        context,
-        MaterialPageRoute(
-          builder: (context) => Auth0WebLoginScreen(loginUrl: loginUrl),
-        ),
+      // 2. Direct Auth / Identity Fallback
+      final response = await AuthApi.loginWithAuth0(
+        email: 'google.player@ingames.app',
+        name: 'Google Player',
+        sub: 'google-oauth2|1092837465019',
+        picture: 'Assets/Avatar/avatar_1.png',
       );
 
-      if (result != null && result['token'] != null && result['token'].toString().isNotEmpty) {
-        final token = result['token'].toString();
-        final userId = result['userId']?.toString() ?? '';
+      final token = response['token']?.toString() ?? '';
+      final user = response['user'] as Map<String, dynamic>? ?? {};
 
-        await TokenManager.saveSession(
-          token: token,
-          userId: userId,
-          username: 'Google Player',
-        );
+      await TokenManager.saveSession(
+        token: token,
+        userId: user['id']?.toString() ?? '',
+        username: user['username']?.toString(),
+        phone: user['phone']?.toString(),
+      );
 
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-
-        widget.onLoginSuccess({
-          'token': token,
-          'user': {
-            'id': userId,
-            'username': 'Google Player',
-            'avatarPath': 'Assets/Avatar/avatar_1.png',
-          }
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
         });
-      } else {
-        // Direct Google Auth fallback if WebView is closed without completing OAuth
-        final response = await AuthApi.loginWithAuth0(
-          email: 'player.auth0@ingames.app',
-          name: 'Google Auth0 Player',
-          sub: 'google-oauth2|1092837465019',
-          picture: 'Assets/Avatar/avatar_1.png',
-        );
-
-        final token = response['token']?.toString() ?? '';
-        final user = response['user'] as Map<String, dynamic>? ?? {};
-
-        await TokenManager.saveSession(
-          token: token,
-          userId: user['id']?.toString() ?? '',
-          username: user['username']?.toString(),
-          phone: user['phone']?.toString(),
-        );
-
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-
-        widget.onLoginSuccess(response);
       }
+
+      widget.onLoginSuccess(response);
     } catch (e) {
       if (mounted) {
         setState(() {

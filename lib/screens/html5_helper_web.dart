@@ -27,6 +27,10 @@ StreamSubscription? setupWebMessageListener(void Function(String message) onMess
   });
 }
 
-void openAuth0UniversalLogin(String serverDomain) {
-  web.window.location.href = '$serverDomain/login';
+void openAuth0UniversalLogin(String targetUrl) {
+  if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+    web.window.location.href = targetUrl;
+  } else {
+    web.window.location.href = '$targetUrl/login';
+  }
 }
