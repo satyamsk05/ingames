@@ -23,7 +23,7 @@ class PromoBanner extends StatelessWidget {
           builder: (context, data, child) {
             final banners = data['banners'] as List<dynamic>? ?? [];
 
-            if (syncing || banners.isEmpty) {
+            if (syncing && banners.isEmpty) {
               return Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: const ShimmerBox(
