@@ -85,6 +85,48 @@ class AuthController {
       return ApiResponse.error(res, 'LOGGIN_VERIFY_FAILED', err.message || 'Loggin verification failed', 400);
     }
   }
+
+  static async updateProfile(req, res) {
+    try {
+      const userId = req.user.id;
+      const { username, avatarPath } = req.body || {};
+      const now = new Date().toISOString();
+
+      const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+      if (!user) {
+        return ApiResponse.error(res, 'USER_NOT_FOUND', 'User not found', 404);
+      }
+
+      const updatedUsername = username && typeof username === 'string' && username.trim().length > 0
+        ? username.trim()
+        : user.username;
+      const updatedAvatar = avatarPath && typeof avatarPath === 'string' && avatarPath.trim().length > 0
+        ? avatarPath.trim()
+        : user.avatar_path;
+
+      db.prepare(`
+        UPDATE users
+        SET username = ?, avatar_path = ?, updated_at = ?
+        WHERE id = ?
+      `).run(updatedUsername, updatedAvatar, now, userId);
+
+      const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+      const wallet = LedgerService.getWalletSummary(userId);
+
+      return ApiResponse.success(res, {
+        user: {
+          id: updatedUser.id,
+          phone: updatedUser.phone,
+          username: updatedUser.username,
+          avatarPath: updatedUser.avatar_path,
+          wallet,
+        },
+      });
+    } catch (err) {
+      console.error('Update profile error:', err);
+      return ApiResponse.error(res, 'UPDATE_PROFILE_FAILED', err.message || 'Failed to update profile', 500);
+    }
+  }
 }
 
 module.exports = AuthController;
