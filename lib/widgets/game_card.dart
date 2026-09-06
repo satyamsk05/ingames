@@ -36,8 +36,8 @@ class GameCard extends StatelessWidget {
         children: [
           // Game Card Image Container
           Container(
-            width: 250,
-            height: 250,
+            width: 175,
+            height: 175,
             margin: const EdgeInsets.only(right: 16.0),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(15.0),

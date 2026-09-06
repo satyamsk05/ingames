@@ -25,12 +25,12 @@ class _OnlineTickerState extends State<OnlineTicker>
 
   int _currentCount = 89156;
   final List<String> _allAvatars = [
-    'assets/avatar/avatar_1.png',
-    'assets/avatar/avatar_2.png',
-    'assets/avatar/avatar_3.png',
-    'assets/avatar/avatar_7.png',
-    'assets/avatar/avatar_8.png',
-    'assets/avatar/avatar_9.png',
+    'Assets/Avatar/avatar_1.png',
+    'Assets/Avatar/avatar_2.png',
+    'Assets/Avatar/avatar_3.png',
+    'Assets/Avatar/avatar_7.png',
+    'Assets/Avatar/avatar_8.png',
+    'Assets/Avatar/avatar_9.png',
   ];
 
   late List<String> _activeAvatars;

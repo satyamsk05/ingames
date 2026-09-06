@@ -127,14 +127,10 @@ class _Html5GameScreenState extends State<Html5GameScreen> with WidgetsBindingOb
           },
         );
 
-      final localAssetPath = widget.gameUrl.contains('seven_up_down')
-          ? 'assets/game/seven_up_down/index.html'
-          : widget.gameUrl;
-
-      if (localAssetPath.startsWith('assets/')) {
-        _webViewController?.loadFlutterAsset(localAssetPath);
-      } else {
+      if (formattedUrl.startsWith('http')) {
         _webViewController?.loadRequest(Uri.parse(formattedUrl));
+      } else {
+        _webViewController?.loadFlutterAsset('assets/game/seven_up_down/index.html');
       }
     }
   }

@@ -666,7 +666,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
           const SizedBox(height: 8),
           const SizedBox(height: 10),
           SizedBox(
-            height: 265,
+            height: 195,
             child: ListView(
               clipBehavior: Clip.none,
               scrollDirection: Axis.horizontal,
