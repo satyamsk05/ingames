@@ -1,5 +1,6 @@
 import { gameConfig } from '../config/gameConfig.js';
 import { eventBus } from '../core/EventBus.js';
+import { apiClient } from '../network/ApiClient.js';
 
 class GameState {
   constructor() {
@@ -20,8 +21,9 @@ class GameState {
   }
 
   setBalance(newBalance) {
-    this.userBalance = Number(newBalance) || 0;
+    this.userBalance = Math.max(0, Number(newBalance) || 0);
     eventBus.emit('BALANCE_UPDATED', this.userBalance);
+    apiClient.notifyParentWallet(this.userBalance);
   }
 
   setSelectedChip(value, color = '#00e676') {
@@ -32,25 +34,44 @@ class GameState {
 
   addBet(type, amount) {
     if (type === 'specific') return;
+    if (this.userBalance < amount) return;
+
     this.bets[type] += amount;
     this.totalBet += amount;
+    this.userBalance = Math.max(0, this.userBalance - amount);
+
+    eventBus.emit('BALANCE_UPDATED', this.userBalance);
+    apiClient.notifyParentWallet(this.userBalance);
     eventBus.emit('BETS_UPDATED', { bets: this.bets, totalBet: this.totalBet });
   }
 
   addSpecificBet(number, amount) {
+    if (this.userBalance < amount) return;
+
     this.bets.specific[number] = (this.bets.specific[number] || 0) + amount;
     this.totalBet += amount;
+    this.userBalance = Math.max(0, this.userBalance - amount);
+
+    eventBus.emit('BALANCE_UPDATED', this.userBalance);
+    apiClient.notifyParentWallet(this.userBalance);
     eventBus.emit('BETS_UPDATED', { bets: this.bets, totalBet: this.totalBet });
   }
 
   clearBets() {
+    if (this.totalBet > 0) {
+      this.userBalance += this.totalBet;
+      eventBus.emit('BALANCE_UPDATED', this.userBalance);
+      apiClient.notifyParentWallet(this.userBalance);
+    }
     this.bets = { down: 0, seven: 0, up: 0, specific: {} };
     this.totalBet = 0;
     eventBus.emit('BETS_UPDATED', { bets: this.bets, totalBet: this.totalBet });
   }
 
   doubleBets() {
-    if (this.totalBet === 0 || this.userBalance < this.totalBet * 2) return false;
+    if (this.totalBet === 0 || this.userBalance < this.totalBet) return false;
+    
+    this.userBalance -= this.totalBet;
     this.bets.down *= 2;
     this.bets.seven *= 2;
     this.bets.up *= 2;
@@ -58,6 +79,9 @@ class GameState {
       this.bets.specific[key] *= 2;
     }
     this.totalBet *= 2;
+
+    eventBus.emit('BALANCE_UPDATED', this.userBalance);
+    apiClient.notifyParentWallet(this.userBalance);
     eventBus.emit('BETS_UPDATED', { bets: this.bets, totalBet: this.totalBet });
     return true;
   }

@@ -2,7 +2,6 @@ import { gameState } from './GameState.js';
 import { soundManager } from '../core/SoundManager.js';
 import { apiClient } from '../network/ApiClient.js';
 import { eventBus } from '../core/EventBus.js';
-import { GAME_ID } from '../config/constants.js';
 
 class ResultManager {
   processResult(result) {
@@ -26,15 +25,30 @@ class ResultManager {
       winAmt += bets.up * 2;
     }
     if (bets.specific && bets.specific[total]) {
-      winAmt += bets.specific[total] * 6;
+      const oddsMap = { 2: 26, 3: 12, 4: 8, 5: 6, 6: 5, 8: 5, 9: 6, 10: 8, 11: 12, 12: 26 };
+      const mult = oddsMap[total] || 6;
+      winAmt += bets.specific[total] * mult;
     }
 
     gameState.addHistoryResult(total);
 
     if (winAmt > 0) {
       soundManager.playWin();
+      const newBal = gameState.userBalance + winAmt;
+      gameState.setBalance(newBal);
       eventBus.emit('WIN_OCCURRED', { winAmount: winAmt });
     }
+
+    // Refresh profile balance from backend server to stay 100% synced with DB
+    setTimeout(() => {
+      apiClient.getUserProfile().then(res => {
+        if (res && res.data) {
+          const profile = res.data.profile || res.data;
+          const balance = profile.balance !== undefined ? profile.balance : (profile.totalBalance !== undefined ? profile.totalBalance : 0);
+          gameState.setBalance(balance);
+        }
+      }).catch(() => {});
+    }, 1500);
   }
 }
 
