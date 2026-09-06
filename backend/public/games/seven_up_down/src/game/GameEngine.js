@@ -25,6 +25,28 @@ class GameEngine {
     eventBus.on('ROUND_RESULT', (result) => {
       this.handleRoundResult(result);
     });
+
+    eventBus.on('PLACE_BET', ({ betType, stakeAmount }) => {
+      this.handlePlaceBet(betType, stakeAmount);
+    });
+  }
+
+  handlePlaceBet(betType, stakeAmount) {
+    if (!this.currentRoundId) return;
+    apiClient.placeBet({
+      roundId: this.currentRoundId,
+      betType: betType,
+      stakeAmount: stakeAmount
+    }).then(res => {
+      if (res && res.data && res.data.wallet) {
+        const totalBal = res.data.wallet.totalBalance !== undefined ? res.data.wallet.totalBalance : res.data.wallet.balance;
+        if (totalBal !== undefined) {
+          gameState.serverBalance = totalBal;
+        }
+      }
+    }).catch(err => {
+      console.warn('Place bet error:', err);
+    });
   }
 
   fetchUserProfile() {
@@ -86,29 +108,6 @@ class GameEngine {
   handleBettingClosed() {
     gameState.isRolling = true;
     timerManager.stopTimer();
-    this.submitQueuedBets();
-  }
-
-  submitQueuedBets() {
-    if (!this.currentRoundId || gameState.totalBet <= 0) return;
-
-    const betPromises = [];
-    if (gameState.bets.down > 0) {
-      betPromises.push(apiClient.placeBet({ roundId: this.currentRoundId, betType: 'DOWN', stakeAmount: gameState.bets.down }));
-    }
-    if (gameState.bets.seven > 0) {
-      betPromises.push(apiClient.placeBet({ roundId: this.currentRoundId, betType: 'SEVEN', stakeAmount: gameState.bets.seven }));
-    }
-    if (gameState.bets.up > 0) {
-      betPromises.push(apiClient.placeBet({ roundId: this.currentRoundId, betType: 'UP', stakeAmount: gameState.bets.up }));
-    }
-    for (const num in gameState.bets.specific) {
-      if (gameState.bets.specific[num] > 0) {
-        betPromises.push(apiClient.placeBet({ roundId: this.currentRoundId, betType: num, stakeAmount: gameState.bets.specific[num] }));
-      }
-    }
-
-    Promise.all(betPromises).catch(() => {});
   }
 
   handleRoundResult(result) {

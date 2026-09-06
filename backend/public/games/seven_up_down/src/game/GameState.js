@@ -5,6 +5,7 @@ import { apiClient } from '../network/ApiClient.js';
 class GameState {
   constructor() {
     this.userBalance = gameConfig.defaultBalance;
+    this.serverBalance = gameConfig.defaultBalance;
     this.selectedChip = 10;
     this.selectedChipColor = '#00e676';
     this.bets = {
@@ -21,7 +22,10 @@ class GameState {
   }
 
   setBalance(newBalance) {
-    this.userBalance = Math.max(0, Number(newBalance) || 0);
+    const rawBalance = Math.max(0, Number(newBalance) || 0);
+    this.serverBalance = rawBalance;
+    // Always deduct active unsubmitted bets on table from raw server balance
+    this.userBalance = Math.max(0, this.serverBalance - (this.totalBet || 0));
     eventBus.emit('BALANCE_UPDATED', this.userBalance);
     apiClient.notifyParentWallet(this.userBalance);
   }
@@ -34,7 +38,7 @@ class GameState {
 
   addBet(type, amount) {
     if (type === 'specific') return;
-    if (this.userBalance < amount) return;
+    if (this.isRolling || this.userBalance < amount) return;
 
     this.bets[type] += amount;
     this.totalBet += amount;
@@ -43,10 +47,13 @@ class GameState {
     eventBus.emit('BALANCE_UPDATED', this.userBalance);
     apiClient.notifyParentWallet(this.userBalance);
     eventBus.emit('BETS_UPDATED', { bets: this.bets, totalBet: this.totalBet });
+
+    // Send bet immediately to server while round is open
+    eventBus.emit('PLACE_BET', { betType: type.toUpperCase(), stakeAmount: amount });
   }
 
   addSpecificBet(number, amount) {
-    if (this.userBalance < amount) return;
+    if (this.isRolling || this.userBalance < amount) return;
 
     this.bets.specific[number] = (this.bets.specific[number] || 0) + amount;
     this.totalBet += amount;
@@ -55,23 +62,25 @@ class GameState {
     eventBus.emit('BALANCE_UPDATED', this.userBalance);
     apiClient.notifyParentWallet(this.userBalance);
     eventBus.emit('BETS_UPDATED', { bets: this.bets, totalBet: this.totalBet });
+
+    // Send bet immediately to server while round is open
+    eventBus.emit('PLACE_BET', { betType: String(number), stakeAmount: amount });
   }
 
   clearBets() {
-    if (this.totalBet > 0) {
-      this.userBalance += this.totalBet;
-      eventBus.emit('BALANCE_UPDATED', this.userBalance);
-      apiClient.notifyParentWallet(this.userBalance);
-    }
     this.bets = { down: 0, seven: 0, up: 0, specific: {} };
     this.totalBet = 0;
+    if (this.serverBalance !== undefined) {
+      this.userBalance = this.serverBalance;
+    }
+    eventBus.emit('BALANCE_UPDATED', this.userBalance);
+    apiClient.notifyParentWallet(this.userBalance);
     eventBus.emit('BETS_UPDATED', { bets: this.bets, totalBet: this.totalBet });
   }
 
   doubleBets() {
     if (this.totalBet === 0 || this.userBalance < this.totalBet) return false;
     
-    this.userBalance -= this.totalBet;
     this.bets.down *= 2;
     this.bets.seven *= 2;
     this.bets.up *= 2;
@@ -79,6 +88,7 @@ class GameState {
       this.bets.specific[key] *= 2;
     }
     this.totalBet *= 2;
+    this.userBalance = Math.max(0, (this.serverBalance !== undefined ? this.serverBalance : this.userBalance) - this.totalBet);
 
     eventBus.emit('BALANCE_UPDATED', this.userBalance);
     apiClient.notifyParentWallet(this.userBalance);
