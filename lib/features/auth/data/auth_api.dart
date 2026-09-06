@@ -41,19 +41,21 @@ class AuthApi {
 
   static Future<Map<String, dynamic>> loginWithAuth0({
     String? accessToken,
+    String? idToken,
     String? email,
     String? name,
     String? picture,
     String? sub,
   }) async {
-    if (accessToken == null || accessToken.isEmpty) {
-      throw ApiException(
-        code: 'AUTH0_ACCESS_TOKEN_REQUIRED',
-        message: 'Auth0 access token required',
-        statusCode: 401,
-      );
-    }
-    final res = await ApiClient.post('/auth/auth0', {'accessToken': accessToken});
+    final payload = <String, dynamic>{};
+    if (accessToken != null && accessToken.isNotEmpty) payload['accessToken'] = accessToken;
+    if (idToken != null && idToken.isNotEmpty) payload['idToken'] = idToken;
+    if (email != null) payload['email'] = email;
+    if (name != null) payload['name'] = name;
+    if (picture != null) payload['picture'] = picture;
+    if (sub != null) payload['sub'] = sub;
+
+    final res = await ApiClient.post('/auth/auth0', payload);
     return res as Map<String, dynamic>;
   }
 }

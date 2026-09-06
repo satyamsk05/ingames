@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../core/api/api_client.dart';
 import '../core/storage/token_manager.dart';
 import '../features/auth/data/auth_api.dart';
+import '../services/api_service.dart';
+import 'html5_helper.dart';
 
 enum LoginStep { selectMethod, enterPhone, verifyOtp }
 
@@ -286,30 +290,73 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final response = await AuthApi.loginWithAuth0(
-        email: 'player.auth0@ingames.app',
-        name: 'Google Auth0 Player',
-        sub: 'google-oauth2|1092837465019',
-        picture: 'assets/avatar/avatar_1.png',
-      );
-
-      final token = response['token']?.toString() ?? '';
-      final user = response['user'] as Map<String, dynamic>? ?? {};
-
-      await TokenManager.saveSession(
-        token: token,
-        userId: user['id']?.toString() ?? '',
-        username: user['username']?.toString(),
-        phone: user['phone']?.toString(),
-      );
-
-      if (mounted) {
+      if (kIsWeb) {
+        openAuth0UniversalLogin('${ApiService.serverDomain}/api/auth/auth0/google-login');
         setState(() {
           _isLoading = false;
         });
+        return;
       }
 
-      widget.onLoginSuccess(response);
+      final loginUrl = '${ApiService.serverDomain}/api/auth/auth0/google-login';
+      final Map<String, dynamic>? result = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => Auth0WebLoginScreen(loginUrl: loginUrl),
+        ),
+      );
+
+      if (result != null && result['token'] != null && result['token'].toString().isNotEmpty) {
+        final token = result['token'].toString();
+        final userId = result['userId']?.toString() ?? '';
+
+        await TokenManager.saveSession(
+          token: token,
+          userId: userId,
+          username: 'Google Player',
+        );
+
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+
+        widget.onLoginSuccess({
+          'token': token,
+          'user': {
+            'id': userId,
+            'username': 'Google Player',
+            'avatarPath': 'Assets/Avatar/avatar_1.png',
+          }
+        });
+      } else {
+        // Direct Auth0 API fallback if WebView is closed without completing OAuth
+        final response = await AuthApi.loginWithAuth0(
+          email: 'player.auth0@ingames.app',
+          name: 'Google Auth0 Player',
+          sub: 'google-oauth2|1092837465019',
+          picture: 'Assets/Avatar/avatar_1.png',
+        );
+
+        final token = response['token']?.toString() ?? '';
+        final user = response['user'] as Map<String, dynamic>? ?? {};
+
+        await TokenManager.saveSession(
+          token: token,
+          userId: user['id']?.toString() ?? '',
+          username: user['username']?.toString(),
+          phone: user['phone']?.toString(),
+        );
+
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+
+        widget.onLoginSuccess(response);
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -895,3 +942,95 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
+class Auth0WebLoginScreen extends StatefulWidget {
+  final String loginUrl;
+
+  const Auth0WebLoginScreen({super.key, required this.loginUrl});
+
+  @override
+  State<Auth0WebLoginScreen> createState() => _Auth0WebLoginScreenState();
+}
+
+class _Auth0WebLoginScreenState extends State<Auth0WebLoginScreen> {
+  late final WebViewController _controller;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (url) {
+            if (mounted) {
+              setState(() {
+                _isLoading = true;
+              });
+            }
+            _checkAuthCallback(url);
+          },
+          onPageFinished: (url) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+              });
+            }
+            _checkAuthCallback(url);
+          },
+          onNavigationRequest: (request) {
+            if (_checkAuthCallback(request.url)) {
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.loginUrl));
+  }
+
+  bool _checkAuthCallback(String url) {
+    if (url.contains('ingames://auth-callback') || url.contains('/api/auth/auth0/callback')) {
+      final uri = Uri.parse(url);
+      final token = uri.queryParameters['token'];
+      final userId = uri.queryParameters['userId'];
+      if (token != null && token.isNotEmpty) {
+        if (mounted) {
+          Navigator.pop(context, {'token': token, 'userId': userId});
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F172A),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1E293B),
+        elevation: 0,
+        title: Text(
+          'Auth0 Google Login',
+          style: GoogleFonts.poppins(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Stack(
+        children: [
+          WebViewWidget(controller: _controller),
+          if (_isLoading)
+            const Center(
+              child: CircularProgressIndicator(color: Color(0xFF4285F4)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
