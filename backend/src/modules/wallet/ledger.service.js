@@ -6,6 +6,17 @@ class LedgerService {
    * Get wallet or create default wallet for user
    */
   static getOrCreateWallet(userId) {
+    let user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    if (!user) {
+      const now = new Date().toISOString();
+      try {
+        db.prepare(`
+          INSERT INTO users (id, username, avatar_path, created_at, updated_at)
+          VALUES (?, ?, 'assets/avatar/avatar_1.png', ?, ?)
+        `).run(userId, `Player_${String(userId).slice(-4)}`, now, now);
+      } catch (_) {}
+    }
+
     let wallet = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(userId);
     if (!wallet) {
       const now = new Date().toISOString();
