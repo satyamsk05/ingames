@@ -512,12 +512,16 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
                                     _isSettingsPageActive = true;
                                   });
                                 },
-                                onLogoutTap: () {
-                                  setState(() {
-                                    _isProfilePageActive = false;
-                                    _isLoggedIn = false;
-                                  });
-                                },
+                                onLogoutTap: () async {
+                                   await TokenManager.clearSession();
+                                   await SupabaseService.signOut();
+                                   if (mounted) {
+                                     setState(() {
+                                       _isProfilePageActive = false;
+                                       _isLoggedIn = false;
+                                     });
+                                   }
+                                 },
                               ),
                             )
                           : _isWithdrawPageActive

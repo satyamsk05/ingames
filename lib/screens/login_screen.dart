@@ -244,7 +244,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
 
                   Text(
-                    'Welcome to InGames',
+                    'Get Started',
                     style: GoogleFonts.poppins(
                       color: Colors.white,
                       fontSize: 32,
