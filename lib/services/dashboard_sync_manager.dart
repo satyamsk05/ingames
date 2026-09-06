@@ -65,7 +65,7 @@ class DashboardSyncManager {
   static final Map<String, dynamic> _defaultFallbackData = {
     'profile': {
       'username': 'Player_0480',
-      'avatarUrl': 'Assets/Avatar/avatar_1.png',
+      'avatarUrl': '/avatars/avatar_1.png',
       'avatarFrameUrl': '/frames/golden_ring.png',
       'ringColor': '#FFD700',
       'balance': 0.0,
@@ -91,21 +91,21 @@ class DashboardSyncManager {
       'perReferralTarget': 1000,
       'rewardSteps': {'signUp': 15, 'addCash': 55, 'playGames': 930},
       'recentReferrals': [
-        {'name': 'Dh animation', 'date': '09 Dec', 'amount': '₹15', 'avatarPath': 'Assets/Avatar/avatar_1.png'},
-        {'name': 'Harshthakur', 'date': '08 Dec', 'amount': '₹15', 'avatarPath': 'Assets/Avatar/avatar_2.png'},
-        {'name': 'RAHUL', 'date': '07 Dec', 'amount': '₹15', 'avatarPath': 'Assets/Avatar/avatar_3.png'},
+        {'name': 'Dh animation', 'date': '09 Dec', 'amount': '₹15', 'avatarPath': '/avatars/avatar_1.png'},
+        {'name': 'Harshthakur', 'date': '08 Dec', 'amount': '₹15', 'avatarPath': '/avatars/avatar_2.png'},
+        {'name': 'RAHUL', 'date': '07 Dec', 'amount': '₹15', 'avatarPath': '/avatars/avatar_3.png'},
       ],
     },
     'onlinePlayers': {
       'totalOnline': 89156,
       'ringColors': ['#FFD700', '#FF9800', '#4FC3F7'],
       'avatars': [
-        'Assets/Avatar/avatar_1.png',
-        'Assets/Avatar/avatar_2.png',
-        'Assets/Avatar/avatar_3.png',
-        'Assets/Avatar/avatar_7.png',
-        'Assets/Avatar/avatar_8.png',
-        'Assets/Avatar/avatar_9.png',
+        '/avatars/avatar_1.png',
+        '/avatars/avatar_2.png',
+        '/avatars/avatar_3.png',
+        '/avatars/avatar_7.png',
+        '/avatars/avatar_8.png',
+        '/avatars/avatar_9.png',
       ],
     },
     'banners': [
@@ -115,7 +115,7 @@ class DashboardSyncManager {
         'title': 'DEPOSIT BONUS\n180% BONUS',
         'subtitle': 'DEPOSIT -> GET BONUS',
         'buttonText': 'DEPOSIT NOW',
-        'imageUrl': 'Assets/banner.png',
+        'imageUrl': '/banners/deposit_banner.png',
         'targetScreen': '/add-cash',
       },
     ],
@@ -123,7 +123,7 @@ class DashboardSyncManager {
       {
         'id': 'classic_dice',
         'title': 'Classic Dice',
-        'imagePath': 'Assets/images/classic_dice.png',
+        'imagePath': '/games/classic_dice.png',
         'accentColor': '#00E676',
         'gameUrl': '/games/seven_up_down/index.html',
         'isAvailable': true,
@@ -131,7 +131,7 @@ class DashboardSyncManager {
       {
         'id': 'double',
         'title': 'Double',
-        'imagePath': 'Assets/images/double.png',
+        'imagePath': '/games/double.png',
         'accentColor': '#FFD700',
         'gameUrl': '/games/seven_up_down/index.html',
         'isAvailable': false,
@@ -139,7 +139,7 @@ class DashboardSyncManager {
       {
         'id': '7updown',
         'title': '7 Up Down',
-        'imagePath': 'Assets/images/7updown.png',
+        'imagePath': '/games/7updown.png',
         'accentColor': '#FF4081',
         'gameUrl': '/games/seven_up_down/index.html',
         'isAvailable': true,
@@ -147,7 +147,7 @@ class DashboardSyncManager {
       {
         'id': 'mines',
         'title': 'Mines',
-        'imagePath': 'Assets/images/mines.png',
+        'imagePath': '/games/mines.png',
         'accentColor': '#7C4DFF',
         'gameUrl': '/games/seven_up_down/index.html',
         'isAvailable': false,
