@@ -1,3 +1,4 @@
+require('dotenv').config();
 const db = require('./src/config/db');
 const LedgerService = require('./src/modules/wallet/ledger.service');
 const SevenUpDownService = require('./src/modules/game/seven_up_down.service');
@@ -26,6 +27,15 @@ const token = generateToken({ id: 'test_user_1', phone: '9000000001' });
 const decoded = verifyToken(token);
 if (decoded.id !== 'test_user_1') throw new Error('JWT verification failed');
 console.log('✅ JWT Token Generation & Verification PASSED');
+
+// 1b. LOGGIN.DEV WHATSAPP AUTH SDK TEST
+console.log('\n--- 1b. Loggin.dev WhatsApp Auth SDK Verification ---');
+const LogginService = require('./src/modules/auth/loggin.service');
+const logginRes = LogginService.createToken();
+if (!logginRes || !logginRes.token || !logginRes.link) {
+  throw new Error('Loggin.dev createToken failed');
+}
+console.log('✅ Loggin.dev SDK Token & Link Creation PASSED');
 
 // 2. CONCURRENCY TEST: ₹10,000 balance, 2 simultaneous debits of ₹8,000
 console.log('\n--- 2. Wallet Concurrency Test ---');

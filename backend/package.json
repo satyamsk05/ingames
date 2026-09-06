@@ -8,13 +8,13 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "@loggin/sdk": "^0.1.1",
     "@supabase/supabase-js": "^2.115.0",
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
+    "eventsource": "^5.1.1",
     "express": "^4.19.2",
-    "express-oauth2-jwt-bearer": "^1.10.0",
-    "express-openid-connect": "^3.4.0",
     "jsonwebtoken": "^9.0.3",
     "socket.io": "^4.7.5"
   },

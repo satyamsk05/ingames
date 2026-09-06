@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import '../core/api/api_client.dart';
 
 class ApiService {
@@ -11,45 +9,6 @@ class ApiService {
 
   static String get baseUrl => '$serverDomain/api';
 
-  static List<String> get _candidateBaseUrls => [
-        if (serverDomain.isNotEmpty) '$serverDomain/api',
-        'http://localhost:5050/api',
-        'http://127.0.0.1:5050/api',
-        'http://10.0.2.2:5050/api',
-        'https://ingames.onrender.com/api',
-      ];
-
-  // 0a. Send OTP via SMS or WhatsApp
-  static Future<Map<String, dynamic>?> sendOtp({
-    required String phone,
-    String channel = 'sms',
-  }) async {
-    for (final base in _candidateBaseUrls) {
-      try {
-        final response = await http.post(
-          Uri.parse('$base/auth/send-otp'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'phone': phone,
-            'channel': channel,
-          }),
-        ).timeout(const Duration(seconds: 8));
-
-        final data = jsonDecode(response.body);
-        if (response.statusCode == 200) {
-          serverDomain = base.replaceAll('/api', '');
-          return data;
-        } else if (data is Map<String, dynamic> && data['message'] != null) {
-          return data;
-        }
-      } catch (_) {}
-    }
-    return {'status': 'error', 'message': 'Cannot connect to backend server. Check server connection.'};
-  }
-
-  static Future<Map<String, dynamic>?> verifyOtp({required String phone, required String otp}) async {
-    try { return (await ApiClient.post('/auth/verify-otp', {'phone': phone, 'otp': otp})) as Map<String, dynamic>; } catch (_) { return null; }
-  }
   static Future<Map<String, dynamic>?> getAppConfig() async {
     try { return (await ApiClient.get('/config')) as Map<String, dynamic>; } catch (_) { return null; }
   }

@@ -1,9 +1,15 @@
+require('dotenv').config();
+
+const EventSourceModule = require('eventsource');
+const EventSourceClass = EventSourceModule.EventSource || EventSourceModule.default || EventSourceModule;
+global.EventSource = EventSourceClass;
+globalThis.EventSource = EventSourceClass;
+
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const path = require('path');
 const { Server } = require('socket.io');
-require('dotenv').config();
 
 const apiRoutes = require('./src/routes');
 const SevenUpDownService = require('./src/modules/game/seven_up_down.service');

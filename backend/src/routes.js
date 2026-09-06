@@ -7,14 +7,9 @@ const GameController = require('./modules/game/game.controller');
 const { authMiddleware } = require('./core/auth_middleware');
 
 // --- Auth Routes (Public) ---
-router.post('/auth/send-otp', AuthController.sendOtp);
-router.post('/auth/verify-otp', AuthController.verifyOtp);
-router.post('/auth/google', AuthController.googleAuth);
+router.post('/auth/loggin/create-token', AuthController.createLogginToken);
+router.post('/auth/loggin/verify-token', AuthController.verifyLogginToken);
 router.post('/auth/guest', AuthController.guestAuth);
-router.post('/auth/auth0', AuthController.auth0Auth);
-router.get('/auth/auth0/google-login', AuthController.auth0GoogleLogin);
-router.get('/auth/auth0/google-login/login', AuthController.auth0GoogleLogin);
-router.get('/auth/auth0/callback', AuthController.auth0Callback);
 
 // --- User Profile & Wallet Routes (Strict Auth Required) ---
 router.get('/user/profile', authMiddleware, WalletController.getProfileAndWallet);
