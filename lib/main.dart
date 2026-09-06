@@ -29,6 +29,7 @@ import 'widgets/promo_banner.dart';
 import 'screens/login_screen.dart';
 import 'screens/html5_game_screen.dart';
 import 'services/api_service.dart';
+import 'services/supabase_service.dart';
 import 'core/storage/token_manager.dart';
 import 'features/wallet/data/wallet_api.dart';
 import 'widgets/network_error_widget.dart';
@@ -47,6 +48,7 @@ class CustomMouseScrollBehavior extends MaterialScrollBehavior {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SupabaseService.initialize();
   await TokenManager.init();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
