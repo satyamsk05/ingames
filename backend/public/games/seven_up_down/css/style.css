@@ -580,8 +580,8 @@ body, html {
   background: linear-gradient(180deg, #1b0a50 0%, #0d0430 100%);
   border: 1.5px solid rgba(120, 80, 255, 0.4);
   border-radius: 22px;
-  padding: 14px 16px;
-  min-height: 68px;
+  padding: 10px 16px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -644,24 +644,24 @@ body, html {
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  z-index: 10;
+  z-index: 20;
 }
 
 .chip-arch-tab {
   background: linear-gradient(180deg, #00e676 0%, #007934 100%);
   border: 2.5px solid #69f0ae;
   border-bottom: none;
-  border-top-left-radius: 31px;
-  border-top-right-radius: 31px;
+  border-top-left-radius: 33px;
+  border-top-right-radius: 33px;
   padding: 4px 2px 2px 2px;
-  width: 60px;
-  min-height: 68px;
+  width: 65px;
+  min-height: 64px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 -8px 25px rgba(0, 230, 118, 0.6), inset 0 2px 6px rgba(255, 255, 255, 0.5);
+  box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.4);
   transition: transform 0.15s, box-shadow 0.2s;
 }
 
@@ -670,19 +670,19 @@ body, html {
 }
 
 .main-3d-chip {
-  width: 56px;
-  height: 56px;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #00e676 0%, #00802b 100%);
-  border: 4px dashed #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 19px;
-  font-weight: 700;
-  color: #111;
-  box-shadow: inset 0 -3px 6px rgba(0,0,0,0.4), 0 6px 16px rgba(0,0,0,0.6);
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.7));
   transition: transform 0.15s;
+}
+.main-3d-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .main-3d-chip:active {
   transform: scale(0.92);
@@ -691,50 +691,88 @@ body, html {
 /* Radial Arc Chip Selector Popup */
 .radial-chips-popup {
   position: absolute;
-  bottom: 85px;
+  bottom: 35px;
   left: 50%;
-  transform: translateX(-50%) scale(0);
-  background: rgba(13, 4, 48, 0.95);
-  border: 1.5px solid #00e676;
-  border-radius: 30px;
-  padding: 10px 16px;
-  display: flex;
-  gap: 10px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(0,230,118,0.4);
-  z-index: 200;
-  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s;
-  opacity: 0;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  z-index: 300;
   pointer-events: none;
 }
+
 .radial-chips-popup.active {
-  transform: translateX(-50%) scale(1);
-  opacity: 1;
   pointer-events: auto;
 }
 
 .pop-chip {
-  width: 44px;
-  height: 44px;
+  position: absolute;
+  top: -24px;
+  left: -24px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
   cursor: pointer;
-  border: 2.5px dashed #fff;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-  transition: transform 0.15s;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.8));
+  opacity: 0;
+  transform: translate(0, 0) rotate(-60deg) scale(0.1);
+  transition: transform 0.42s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease-out;
 }
-.pop-chip:hover, .pop-chip:active {
-  transform: scale(1.15);
+
+.pop-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: transform 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.18s ease;
 }
-.pop-10 { background: radial-gradient(circle, #00e676 0%, #00802b 100%); }
-.pop-50 { background: radial-gradient(circle, #0288d1 0%, #01579b 100%); }
-.pop-100 { background: radial-gradient(circle, #d50000 0%, #8e0000 100%); }
-.pop-500 { background: radial-gradient(circle, #aa00ff 0%, #4a148c 100%); }
-.pop-1000 { background: radial-gradient(circle, #ffd54f 0%, #ff8f00 100%); color: #111; }
+
+.pop-chip:hover img, .pop-chip:active img {
+  transform: scale(1.22);
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.95));
+}
+
+/* Retract delays (closing sweep) */
+.pop-chip:nth-child(1) { transition-delay: 0.24s; }
+.pop-chip:nth-child(2) { transition-delay: 0.18s; }
+.pop-chip:nth-child(3) { transition-delay: 0.12s; }
+.pop-chip:nth-child(4) { transition-delay: 0.06s; }
+.pop-chip:nth-child(5) { transition-delay: 0s; }
+
+/* Clock-Fan Radial Sweep Opening Coordinates (50 -> 100 -> 500 -> 1K -> 5K) */
+.radial-chips-popup.active .pop-chip:nth-child(1) {
+  opacity: 1;
+  transform: translate(-85px, -18px) rotate(0deg) scale(1);
+  transition-delay: 0.04s;
+}
+
+.radial-chips-popup.active .pop-chip:nth-child(2) {
+  opacity: 1;
+  transform: translate(-54px, -64px) rotate(0deg) scale(1);
+  transition-delay: 0.10s;
+}
+
+.radial-chips-popup.active .pop-chip:nth-child(3) {
+  opacity: 1;
+  transform: translate(0px, -84px) rotate(0deg) scale(1);
+  transition-delay: 0.16s;
+}
+
+.radial-chips-popup.active .pop-chip:nth-child(4) {
+  opacity: 1;
+  transform: translate(54px, -64px) rotate(0deg) scale(1);
+  transition-delay: 0.22s;
+}
+
+.radial-chips-popup.active .pop-chip:nth-child(5) {
+  opacity: 1;
+  transform: translate(85px, -18px) rotate(0deg) scale(1);
+  transition-delay: 0.28s;
+}
 
 /* Right Action Buttons */
 .right-action-section {

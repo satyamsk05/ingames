@@ -4,7 +4,11 @@ const router = express.Router();
 const AuthController = require('./modules/auth/auth.controller');
 const WalletController = require('./modules/wallet/wallet.controller');
 const GameController = require('./modules/game/game.controller');
-const { authMiddleware } = require('./core/auth_middleware');
+const DashboardController = require('./modules/app/dashboard.controller');
+const { authMiddleware, optionalAuthMiddleware } = require('./core/auth_middleware');
+
+// --- Dashboard & Config Routes ---
+router.get('/app/dashboard-header', optionalAuthMiddleware, DashboardController.getDashboardHeader);
 
 // --- Auth Routes (Public) ---
 router.post('/auth/loggin/create-token', AuthController.createLogginToken);

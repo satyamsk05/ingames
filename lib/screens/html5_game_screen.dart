@@ -139,27 +139,34 @@ class _Html5GameScreenState extends State<Html5GameScreen> with WidgetsBindingOb
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _msgSubscription?.cancel();
-    if (!kIsWeb && _webViewController != null) {
-      try {
-        _webViewController?.runJavaScript("if (window.soundManager) window.soundManager.stopAll();");
-        _webViewController?.loadRequest(Uri.parse('about:blank'));
-      } catch (_) {}
-    }
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive || state == AppLifecycleState.detached) {
+    final isBackground = state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden;
+
+    if (isBackground) {
       if (!kIsWeb && _webViewController != null) {
         try {
-          _webViewController?.runJavaScript("if (window.soundManager) window.soundManager.stopAll();");
+          _webViewController?.runJavaScript("""
+            if (window.soundManager) {
+              window.soundManager.stopAll();
+            }
+          """);
         } catch (_) {}
       }
     } else if (state == AppLifecycleState.resumed) {
       if (!kIsWeb && _webViewController != null) {
         try {
-          _webViewController?.runJavaScript("if (window.soundManager) window.soundManager.resume();");
+          _webViewController?.runJavaScript("""
+            if (window.soundManager) {
+              window.soundManager.resume();
+            }
+          """);
         } catch (_) {}
       }
     }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -40,6 +41,11 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _phoneController.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   @override
@@ -57,46 +63,17 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _handleSkipLogin() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-      _statusMessage = null;
-    });
-    try {
-      final res = await AuthApi.guestLogin();
-      final token = res['token']?.toString() ?? '';
-      final user = res['user'] as Map<String, dynamic>? ?? {};
-
-      await TokenManager.saveSession(
-        token: token,
-        userId: user['id']?.toString() ?? '',
-        username: user['username']?.toString(),
-        phone: user['phone']?.toString(),
-      );
-
-      _sessionData = res;
-      _nameController.text = user['username']?.toString() ?? 'Guest';
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _currentStep = 5; // Move to Welcome Screen directly for guest
-        });
-      }
-      _startWelcomeTransition();
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = e is ApiException ? e.message : 'Guest login failed. Please check connection.';
-        });
-      }
-    }
-  }
-
   Future<void> _handlePhoneNext() async {
     FocusScope.of(context).unfocus();
+
+    final phoneDigits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
+    if (phoneDigits.length != 10) {
+      setState(() {
+        _errorMessage = 'Please enter a valid 10-digit mobile number.';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -104,7 +81,6 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     });
 
     try {
-      // 1. Create Loggin auth token & pre-filled WhatsApp link
       final createRes = await AuthApi.createLogginToken();
       final logginToken = createRes['token']?.toString() ?? '';
       final link = createRes['link']?.toString() ?? '';
@@ -122,24 +98,22 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
         });
       }
 
-      // 2. Open pre-filled WhatsApp message
       await _reopenWhatsApp();
 
       if (mounted) {
         setState(() {
           _currentStep = 2; // Move to Auto Verification Screen
-          _statusMessage = 'Waiting for WhatsApp verification message...';
+          _statusMessage = 'Please wait while we send the verification message to your number';
         });
       }
 
-      // 3. Start resilient verification loop
       _startVerificationLoop();
     } catch (e) {
       if (mounted) {
         setState(() {
           _isLoading = false;
           _statusMessage = null;
-          _currentStep = 1; // Stay on phone screen on error
+          _currentStep = 1;
           _errorMessage = e is ApiException ? e.message : 'Failed to launch WhatsApp. Please check internet connection.';
         });
       }
@@ -168,12 +142,12 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
       setState(() {
         _isLoading = true;
         _errorMessage = null;
-        _statusMessage = 'Verifying WhatsApp message...';
+        _statusMessage = 'Please wait while we send the verification message to your number';
       });
     }
 
     int attempts = 0;
-    const maxAttempts = 30; // Try up to ~75 seconds
+    const maxAttempts = 30;
 
     while (attempts < maxAttempts && mounted && _currentStep == 2) {
       attempts++;
@@ -185,7 +159,6 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
         if (appToken.isNotEmpty) {
           _sessionData = verifyRes;
 
-          // Save InGames user session locally
           await TokenManager.saveSession(
             token: appToken,
             userId: user['id']?.toString() ?? '',
@@ -211,7 +184,6 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
           return;
         }
       } catch (e) {
-        // If user hasn't sent message yet or socket reset, retry silently while on step 2
         await Future.delayed(const Duration(milliseconds: 1500));
       }
     }
@@ -250,24 +222,25 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   }
 
   void _startWelcomeTransition() {
-    Timer(const Duration(milliseconds: 1600), () {
+    Timer(const Duration(milliseconds: 1800), () {
       if (mounted) {
         widget.onLoginSuccess(_sessionData);
       }
     });
   }
 
-  Widget _buildWhatsAppIcon({double size = 28}) {
+  Widget _buildWhatsAppIcon({double size = 28, Color color = const Color(0xFF25D366)}) {
     try {
       return SvgPicture.asset(
         'Assets/whatsapp-svgrepo-com.svg',
         width: size,
         height: size,
+        colorFilter: color != const Color(0xFF25D366) ? ColorFilter.mode(color, BlendMode.srcIn) : null,
       );
     } catch (_) {
       return Icon(
         Icons.chat_bubble_rounded,
-        color: Colors.white,
+        color: color,
         size: size,
       );
     }
@@ -278,12 +251,22 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
       children: List.generate(totalSteps, (index) {
         final isActive = index <= activeIndex;
         return Expanded(
-          child: Container(
-            height: 3,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            height: 4,
             margin: const EdgeInsets.symmetric(horizontal: 3),
             decoration: BoxDecoration(
-              color: isActive ? Colors.white : Colors.white24,
+              color: isActive ? const Color(0xFF9A67BD) : Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(2),
+              boxShadow: isActive
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF9A67BD).withValues(alpha: 0.6),
+                        blurRadius: 6,
+                        spreadRadius: 1,
+                      )
+                    ]
+                  : [],
             ),
           ),
         );
@@ -298,51 +281,81 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top Navigation & Step Progress Bar (Shown for Steps 1..4)
-            if (_currentStep > 0)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        if (_currentStep > 1 && _currentStep != 2)
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-                            onPressed: () {
-                              setState(() {
-                                _currentStep--;
-                              });
-                            },
-                          )
-                        else
-                          const SizedBox(width: 40),
-                        _buildWhatsAppIcon(size: 24),
-                        const SizedBox(width: 40),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: _buildStepIndicator(_currentStep - 1, 3),
-                    ),
-                  ],
-                ),
-              ),
+      backgroundColor: const Color(0xFF0C011A),
+      body: Stack(
+        children: [
+          // Background Gradient with Smooth Curved Wave Shapes
+          const Positioned.fill(
+            child: _PurpleWaveBackground(),
+          ),
 
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 350),
-                child: _buildCurrentStepView(),
-              ),
+          SafeArea(
+            child: Column(
+              children: [
+                // Top Navigation Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          if (_currentStep > 0)
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                              onPressed: () {
+                                setState(() {
+                                  if (_currentStep == 2) {
+                                    _currentStep = 1;
+                                  } else {
+                                    _currentStep--;
+                                  }
+                                });
+                              },
+                            )
+                          else
+                            const SizedBox(width: 40),
+
+                          const SizedBox(width: 40),
+                        ],
+                      ),
+
+                      if (_currentStep > 0) ...[
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: _buildStepIndicator(_currentStep - 1, 3),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                // Main Content View with Smooth Custom Animated Switcher
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (Widget child, Animation<double> animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0.04, 0),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: _buildCurrentStepView(),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -364,593 +377,982 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     }
   }
 
-  // --- STEP 0: Get Started Screen ---
+  // --- STEP 0: Get Started Screen (Exact Screenshot Match) ---
   Widget _buildGetStartedScreen() {
-    return Column(
+    return _SmoothTextFadeSlide(
       key: const ValueKey(0),
-      children: [
-        const Spacer(),
-        // Hero Visual Area
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
+      child: Column(
+        children: [
+          const Spacer(),
+
+          // Bottom Left Bold Content Area
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Play',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 42,
+                    fontWeight: FontWeight.w900,
+                    height: 1.1,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Text(
+                  'Instantly',
+                  style: GoogleFonts.poppins(
+                    color: const Color(0xFF9A67BD),
+                    fontSize: 42,
+                    fontWeight: FontWeight.w900,
+                    height: 1.1,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Text(
+                  'Win Bigger',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 42,
+                    fontWeight: FontWeight.w900,
+                    height: 1.1,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Fast. Secure. More Fun.',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white.withValues(alpha: 0.65),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Full Width White Capsule Button
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _currentStep = 1;
+                    });
+                  },
+                  child: Container(
+                    height: 53,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(26.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          blurRadius: 15,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const SizedBox(width: 24),
+                        Text(
+                          'Get Started',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 22),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Bottom Page Indicator Dots
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 100,
-                height: 100,
+                width: 24,
+                height: 8,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: const Color(0xFF9A67BD),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.25),
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white12, width: 2),
-                ),
-                child: Center(
-                  child: Image.asset(
-                    'Assets/images/classic_dice.png',
-                    width: 60,
-                    height: 60,
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.casino_rounded, color: Colors.white, size: 50),
-                  ),
                 ),
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Fluid Onboarding',
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 32,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Designed to feel fast, secure and intuitive with buttery smooth transitions.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  color: Colors.white60,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                  height: 1.4,
+              const SizedBox(width: 8),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.25),
+                  shape: BoxShape.circle,
                 ),
               ),
             ],
           ),
-        ),
 
-        const Spacer(),
-
-        // Bottom Action Buttons
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-          child: Column(
-            children: [
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _currentStep = 1;
-                  });
-                },
-                child: Container(
-                  height: 58,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(29),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Get Started',
-                      style: GoogleFonts.poppins(
-                        color: Colors.black,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              GestureDetector(
-                onTap: _handleSkipLogin,
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    'Instant Play as Guest',
-                    style: GoogleFonts.poppins(
-                      color: Colors.white54,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+          const SizedBox(height: 32),
+        ],
+      ),
     );
   }
 
   // --- STEP 1: Enter Phone Number Screen ---
   Widget _buildPhoneScreen() {
-    return Column(
+    final phoneDigits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
+    final isValidPhone = phoneDigits.length == 10;
+
+    return _SmoothTextFadeSlide(
       key: const ValueKey(1),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 24),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Enter your phone number',
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                "We'll send a verification link via WhatsApp to this phone number",
-                style: GoogleFonts.poppins(
-                  color: Colors.white60,
-                  fontSize: 13.5,
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              // Phone Number Input Box
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161F2E),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white12),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Row(
-                  children: [
-                    Text(
-                      '🇮🇳 +91',
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(width: 1, height: 24, color: Colors.white24),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.5,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'Phone number',
-                          hintStyle: TextStyle(color: Colors.white30),
-                          border: InputBorder.none,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              if (_errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12.0),
-                  child: Text(
-                    _errorMessage!,
-                    style: GoogleFonts.poppins(
-                      color: const Color(0xFFFF5252),
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-
-        const Spacer(),
-
-        // Bottom Next Button
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-          child: GestureDetector(
-            onTap: _isLoading ? null : _handlePhoneNext,
-            child: Container(
-              height: 58,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(29),
-              ),
-              child: Center(
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2.5),
-                      )
-                    : Text(
-                        'Next',
-                        style: GoogleFonts.poppins(
-                          color: Colors.black,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // --- STEP 2: Verifying Screen ---
-  Widget _buildVerifyingScreen() {
-    return Column(
-      key: const ValueKey(2),
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Spacer(),
-        Container(
-          width: 84,
-          height: 84,
-          decoration: BoxDecoration(
-            color: const Color(0xFF25D366).withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFF25D366).withValues(alpha: 0.4), width: 2),
-          ),
-          child: Center(
-            child: _buildWhatsAppIcon(size: 44),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'Verifying WhatsApp...',
-          style: GoogleFonts.poppins(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 36.0),
-          child: Text(
-            _statusMessage ?? 'Please send the pre-filled message in WhatsApp. As soon as you return, your account will be verified automatically.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
-              color: Colors.white60,
-              fontSize: 13.5,
-              height: 1.4,
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        const SizedBox(
-          width: 28,
-          height: 28,
-          child: CircularProgressIndicator(
-            color: Color(0xFF25D366),
-            strokeWidth: 3,
-          ),
-        ),
-        const Spacer(),
-
-        // Bottom Action Buttons
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-          child: Column(
-            children: [
-              GestureDetector(
-                onTap: _isLoading ? null : () => _startVerificationLoop(),
-                child: Container(
-                  height: 54,
-                  decoration: BoxDecoration(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Enter your mobile number',
+                  style: GoogleFonts.poppins(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(27),
-                  ),
-                  child: Center(
-                    child: Text(
-                      "I've Sent the Message",
-                      style: GoogleFonts.poppins(
-                        color: Colors.black,
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              GestureDetector(
-                onTap: _reopenWhatsApp,
-                child: Container(
-                  height: 50,
+                const SizedBox(height: 28),
+
+                // Translucent Purple Input Container (Exact Screenshot Match)
+                Container(
                   decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(25),
-                    border: Border.all(color: const Color(0xFF25D366), width: 1.5),
+                    color: const Color(0xFF260D4D).withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFF6B21A8).withValues(alpha: 0.7), width: 1.5),
                   ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildWhatsAppIcon(size: 20),
+                      const Text(
+                        '🇮🇳',
+                        style: TextStyle(fontSize: 22),
+                      ),
                       const SizedBox(width: 8),
                       Text(
-                        'Re-open WhatsApp',
+                        '+91',
                         style: GoogleFonts.poppins(
-                          color: const Color(0xFF25D366),
-                          fontSize: 14.5,
+                          color: Colors.white,
+                          fontSize: 16,
                           fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white.withValues(alpha: 0.7), size: 20),
+                      const SizedBox(width: 12),
+                      Container(width: 1, height: 26, color: Colors.white.withValues(alpha: 0.2)),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: TextField(
+                          controller: _phoneController,
+                          keyboardType: TextInputType.number,
+                          maxLength: 10,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(10),
+                          ],
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.2,
+                          ),
+                          decoration: InputDecoration(
+                            counterText: '',
+                            hintText: '98765 43210',
+                            hintStyle: GoogleFonts.poppins(
+                              color: Colors.white.withValues(alpha: 0.35),
+                              fontSize: 17,
+                              fontWeight: FontWeight.w400,
+                            ),
+                            border: InputBorder.none,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+
+                if (_errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12.0),
+                    child: Text(
+                      _errorMessage!,
+                      style: GoogleFonts.poppins(
+                        color: const Color(0xFFFF5252),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-      ],
+
+          const Spacer(),
+
+          // Bottom Vibrant Purple Gradient Next Button (Position-matched to Get Started)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28.0),
+            child: GestureDetector(
+              onTap: _isLoading ? null : _handlePhoneNext,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: isValidPhone ? 1.0 : 0.5,
+                child: Container(
+                  height: 53,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(26.5),
+                    boxShadow: isValidPhone
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.4),
+                              blurRadius: 18,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : [],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (_isLoading) ...[
+                        const Spacer(),
+                        const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                        ),
+                        const Spacer(),
+                      ] else ...[
+                        const SizedBox(width: 24),
+                        Text(
+                          'Next',
+                          style: GoogleFonts.poppins(
+                            color: isValidPhone ? Colors.white : Colors.white.withValues(alpha: 0.6),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          color: isValidPhone ? Colors.white : Colors.white.withValues(alpha: 0.6),
+                          size: 22,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 60),
+        ],
+      ),
+    );
+  }
+
+  // --- STEP 2: WhatsApp Verification Screen (Exact Ripple Animation) ---
+  Widget _buildVerifyingScreen() {
+    return _SmoothTextFadeSlide(
+      key: const ValueKey(2),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Spacer(),
+
+          // Pulsing Concentric WhatsApp Ripple Animation
+          const Center(
+            child: _WhatsAppRippleAnimation(),
+          ),
+
+          const SizedBox(height: 36),
+
+          Text(
+            'Verifying WhatsApp...',
+            style: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40.0),
+            child: Text(
+              _statusMessage ?? 'Please wait while we send the verification message to your number',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                color: Colors.white.withValues(alpha: 0.65),
+                fontSize: 14,
+                height: 1.45,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 30),
+
+          // Custom Glowing Purple Circular Spinner
+          SizedBox(
+            width: 38,
+            height: 38,
+            child: ShaderMask(
+              shaderCallback: (Rect bounds) {
+                return const LinearGradient(
+                  colors: [Color(0xFF9A67BD), Color(0xFF4A0080)],
+                ).createShader(bounds);
+              },
+              child: const CircularProgressIndicator(
+                strokeWidth: 3.5,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+          ),
+
+          const Spacer(),
+
+          // Bottom Action Buttons
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: _isLoading ? null : () => _startVerificationLoop(),
+                  child: Container(
+                    height: 51,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(25.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 12,
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        "I've Sent the Message",
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: _reopenWhatsApp,
+                  child: Container(
+                    height: 47.5,
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(23.75),
+                      border: Border.all(color: const Color(0xFF9A67BD), width: 1.5),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildWhatsAppIcon(size: 20, color: const Color(0xFF9A67BD)),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Re-open WhatsApp',
+                          style: GoogleFonts.poppins(
+                            color: const Color(0xFF9A67BD),
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   // --- STEP 3: Enter Age Screen ---
   Widget _buildAgeScreen() {
-    return Column(
+    return _SmoothTextFadeSlide(
       key: const ValueKey(3),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 24),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Enter your age',
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                "We'll use this to personalize your experience",
-                style: GoogleFonts.poppins(
-                  color: Colors.white60,
-                  fontSize: 13.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 30),
-
-        // Age Wheel Selector
-        SizedBox(
-          height: 200,
-          child: CupertinoPicker(
-            itemExtent: 44,
-            scrollController: FixedExtentScrollController(initialItem: 3), // 21
-            onSelectedItemChanged: (index) {
-              setState(() {
-                _selectedAge = 18 + index;
-              });
-            },
-            children: List.generate(80, (index) {
-              final age = 18 + index;
-              final isSelected = age == _selectedAge;
-              return Center(
-                child: Text(
-                  '$age',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Enter your age',
                   style: GoogleFonts.poppins(
-                    color: isSelected ? Colors.white : Colors.white38,
-                    fontSize: isSelected ? 22 : 17,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-              );
-            }),
-          ),
-        ),
-
-        const Spacer(),
-
-        // Bottom Next Button
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-          child: GestureDetector(
-            onTap: _handleAgeNext,
-            child: Container(
-              height: 58,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(29),
-              ),
-              child: Center(
-                child: Text(
-                  'Next',
+                const SizedBox(height: 6),
+                Text(
+                  "We'll use this to personalize your experience",
                   style: GoogleFonts.poppins(
-                    color: Colors.black,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 13.5,
                   ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 30),
+
+          SizedBox(
+            height: 200,
+            child: CupertinoPicker(
+              itemExtent: 44,
+              scrollController: FixedExtentScrollController(initialItem: 3),
+              onSelectedItemChanged: (index) {
+                setState(() {
+                  _selectedAge = 18 + index;
+                });
+              },
+              children: List.generate(80, (index) {
+                final age = 18 + index;
+                final isSelected = age == _selectedAge;
+                return Center(
+                  child: Text(
+                    '$age',
+                    style: GoogleFonts.poppins(
+                      color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.3),
+                      fontSize: isSelected ? 24 : 17,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+
+          const Spacer(),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28.0),
+            child: GestureDetector(
+              onTap: _handleAgeNext,
+              child: Container(
+                height: 53,
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(26.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 18,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const SizedBox(width: 24),
+                    Text(
+                      'Next',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 22),
+                  ],
                 ),
               ),
             ),
           ),
-        ),
-      ],
+
+          const SizedBox(height: 60),
+        ],
+      ),
     );
   }
 
   // --- STEP 4: Enter Name Screen ---
   Widget _buildNameScreen() {
-    return Column(
+    return _SmoothTextFadeSlide(
       key: const ValueKey(4),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 24),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Enter your name',
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'This is how you will appear to others',
-                style: GoogleFonts.poppins(
-                  color: Colors.white60,
-                  fontSize: 13.5,
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              // Name Input Box
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161F2E),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white12),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: TextField(
-                  controller: _nameController,
-                  autofocus: true,
-                  style: GoogleFonts.poppins(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  decoration: const InputDecoration(
-                    hintText: 'Alex',
-                    hintStyle: TextStyle(color: Colors.white30),
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const Spacer(),
-
-        // Bottom Next Button
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-          child: GestureDetector(
-            onTap: _handleNameNext,
-            child: Container(
-              height: 58,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(29),
-              ),
-              child: Center(
-                child: Text(
-                  'Next',
-                  style: GoogleFonts.poppins(
-                    color: Colors.black,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // --- STEP 5: Welcome Screen (Final Transition) ---
-  Widget _buildWelcomeScreen() {
-    final displayName = _nameController.text.trim().isNotEmpty ? _nameController.text.trim() : 'Alex';
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.white,
-              Color(0xFFF7FEE7),
-              Color(0xFFD9F99D),
-              Color(0xFFBEF264),
-            ],
-            stops: [0.0, 0.45, 0.75, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 60),
                 Text(
-                  'Welcome,',
+                  'Enter your name',
                   style: GoogleFonts.poppins(
-                    color: Colors.black87,
-                    fontSize: 44,
+                    color: Colors.white,
+                    fontSize: 24,
                     fontWeight: FontWeight.w800,
-                    height: 1.1,
-                    letterSpacing: -1.0,
                   ),
                 ),
+                const SizedBox(height: 6),
                 Text(
-                  displayName,
+                  'This is how you will appear to others',
                   style: GoogleFonts.poppins(
-                    color: Colors.black,
-                    fontSize: 44,
-                    fontWeight: FontWeight.w900,
-                    height: 1.1,
-                    letterSpacing: -1.0,
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontSize: 13.5,
                   ),
                 ),
-                const Spacer(),
-                Center(
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    padding: const EdgeInsets.all(4),
-                    child: const CircularProgressIndicator(
-                      color: Colors.black,
-                      strokeWidth: 3.5,
+                const SizedBox(height: 32),
+
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF260D4D).withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFF6B21A8).withValues(alpha: 0.7), width: 1.5),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  child: TextField(
+                    controller: _nameController,
+                    autofocus: true,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Alex',
+                      hintStyle: GoogleFonts.poppins(color: Colors.white.withValues(alpha: 0.3)),
+                      border: InputBorder.none,
                     ),
                   ),
                 ),
-                const SizedBox(height: 50),
               ],
             ),
           ),
-        ),
+
+          const Spacer(),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28.0),
+            child: GestureDetector(
+              onTap: _handleNameNext,
+              child: Container(
+                height: 53,
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(26.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 18,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const SizedBox(width: 24),
+                    Text(
+                      'Next',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 22),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 60),
+        ],
       ),
+    );
+  }
+
+  // --- STEP 5: Welcome Screen (Exact Screenshot Match) ---
+  Widget _buildWelcomeScreen() {
+    final displayName = _nameController.text.trim().isNotEmpty ? _nameController.text.trim() : 'Guest_a6-c';
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0C011A),
+      body: Stack(
+        children: [
+          const Positioned.fill(
+            child: _PurpleWaveBackground(),
+          ),
+          SafeArea(
+            child: _SmoothTextFadeSlide(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 60),
+                    Text(
+                      'Welcome,',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 44,
+                        fontWeight: FontWeight.w900,
+                        height: 1.1,
+                        letterSpacing: -1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      displayName,
+                      style: GoogleFonts.poppins(
+                        color: Colors.white.withValues(alpha: 0.65),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const Spacer(),
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        padding: const EdgeInsets.all(4),
+                        child: const CircularProgressIndicator(
+                          color: Color(0xFF9A67BD),
+                          strokeWidth: 3.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 60),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// CUSTOM UI & ANIMATION COMPONENTS
+// ==========================================
+
+/// Custom Organic Purple Curved Wave Background
+class _PurpleWaveBackground extends StatelessWidget {
+  const _PurpleWaveBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _WaveBackgroundPainter(),
+    );
+  }
+}
+
+class _WaveBackgroundPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Base dark purple canvas paint using sample palette
+    final rect = Offset.zero & size;
+    final bgGradient = RadialGradient(
+      center: const Alignment(0.4, -0.6),
+      radius: 1.3,
+      colors: const [
+        Color(0xFF4A0080),
+        Color(0xFF260046),
+        Color(0xFF0C011A),
+      ],
+      stops: const [0.0, 0.5, 1.0],
+    );
+
+    canvas.drawRect(rect, Paint()..shader = bgGradient.createShader(rect));
+
+    // Top Right Glowing Organic Wave Curve
+    final topRightPath = Path();
+    topRightPath.moveTo(size.width * 0.45, 0);
+    topRightPath.quadraticBezierTo(
+      size.width * 0.5,
+      size.height * 0.18,
+      size.width,
+      size.height * 0.22,
+    );
+    topRightPath.lineTo(size.width, 0);
+    topRightPath.close();
+
+    final topRightGradient = LinearGradient(
+      begin: Alignment.topRight,
+      end: Alignment.bottomLeft,
+      colors: [
+        const Color(0xFF9A67BD).withValues(alpha: 0.45),
+        const Color(0xFF4A0080).withValues(alpha: 0.1),
+      ],
+    );
+
+    canvas.drawPath(
+      topRightPath,
+      Paint()..shader = topRightGradient.createShader(rect),
+    );
+
+    // Bottom Curved Organic Wave
+    final bottomPath = Path();
+    bottomPath.moveTo(0, size.height * 0.52);
+    bottomPath.cubicTo(
+      size.width * 0.35,
+      size.height * 0.45,
+      size.width * 0.65,
+      size.height * 0.68,
+      size.width,
+      size.height * 0.66,
+    );
+    bottomPath.lineTo(size.width, size.height);
+    bottomPath.lineTo(0, size.height);
+    bottomPath.close();
+
+    final bottomGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        const Color(0xFF4A0080).withValues(alpha: 0.5),
+        const Color(0xFF0C011A).withValues(alpha: 0.85),
+      ],
+    );
+
+    canvas.drawPath(
+      bottomPath,
+      Paint()..shader = bottomGradient.createShader(rect),
+    );
+
+    // Secondary Smooth Ambient Wave Layer at Bottom Right
+    final secBottomPath = Path();
+    secBottomPath.moveTo(0, size.height * 0.75);
+    secBottomPath.quadraticBezierTo(
+      size.width * 0.5,
+      size.height * 0.62,
+      size.width,
+      size.height * 0.88,
+    );
+    secBottomPath.lineTo(size.width, size.height);
+    secBottomPath.lineTo(0, size.height);
+    secBottomPath.close();
+
+    final secBottomGradient = LinearGradient(
+      begin: Alignment.bottomLeft,
+      end: Alignment.topRight,
+      colors: [
+        const Color(0xFF4A0080).withValues(alpha: 0.6),
+        const Color(0xFF9A67BD).withValues(alpha: 0.2),
+      ],
+    );
+
+    canvas.drawPath(
+      secBottomPath,
+      Paint()..shader = secBottomGradient.createShader(rect),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Smooth Staggered Slide & Fade Animation Wrapper for Text/Elements
+class _SmoothTextFadeSlide extends StatefulWidget {
+  final Widget child;
+
+  const _SmoothTextFadeSlide({
+    super.key,
+    required this.child,
+  });
+
+  @override
+  State<_SmoothTextFadeSlide> createState() => _SmoothTextFadeSlideState();
+}
+
+class _SmoothTextFadeSlideState extends State<_SmoothTextFadeSlide> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
+    );
+
+    _fadeAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    ));
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Pulsing WhatsApp Verification Concentric Ripple Animation
+class _WhatsAppRippleAnimation extends StatefulWidget {
+  const _WhatsAppRippleAnimation();
+
+  @override
+  State<_WhatsAppRippleAnimation> createState() => _WhatsAppRippleAnimationState();
+}
+
+class _WhatsAppRippleAnimationState extends State<_WhatsAppRippleAnimation> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return SizedBox(
+          width: 220,
+          height: 220,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Concentric Expanding Rings
+              ...List.generate(3, (index) {
+                final progress = (_controller.value + (index * 0.33)) % 1.0;
+                final radius = 50.0 + (progress * 55.0);
+                final opacity = (1.0 - progress).clamp(0.0, 1.0) * 0.35;
+
+                return Container(
+                  width: radius * 2,
+                  height: radius * 2,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF4A0080).withValues(alpha: opacity * 0.4),
+                    border: Border.all(
+                      color: const Color(0xFF9A67BD).withValues(alpha: opacity),
+                      width: 1.5,
+                    ),
+                  ),
+                );
+              }),
+
+              // Center Glowing Circle Container
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF0C011A),
+                  border: Border.all(
+                    color: const Color(0xFF9A67BD).withValues(alpha: 0.6),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF9A67BD).withValues(alpha: 0.35),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: SvgPicture.asset(
+                    'Assets/whatsapp-svgrepo-com.svg',
+                    width: 44,
+                    height: 44,
+                    colorFilter: const ColorFilter.mode(Color(0xFF9A67BD), BlendMode.srcIn),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

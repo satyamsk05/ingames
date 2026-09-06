@@ -67,21 +67,20 @@ flutter:
 
   assets:
     - Assets/IMG_20260904_223402.png
-    - Assets/IMG_20260904_223430.png
     - Assets/IMG_20260904_223443.png
     - Assets/refercoin.png
     - Assets/whatsapp-svgrepo-com.svg
     - Assets/
     - Assets/images/
-    - Assets/btn_icon/
     - Assets/Avatar/
     - Assets/nav_icon/
     - assets/images/
-    - assets/btn_icon/
     - assets/avatar/
     - assets/nav_icon/
     - assets/game/seven_up_down/
     - assets/game/seven_up_down/assets/
+    - assets/game/seven_up_down/assets/chips/
+    - Assets/chips/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

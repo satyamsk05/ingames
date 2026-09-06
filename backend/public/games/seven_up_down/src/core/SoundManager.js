@@ -43,7 +43,7 @@ class SoundManager {
   stopAll() {
     if (this.ctx && typeof this.ctx.suspend === 'function') {
       try {
-        if (this.ctx.state === 'running') {
+        if (this.ctx.state !== 'suspended') {
           this.ctx.suspend();
         }
       } catch (_) {}

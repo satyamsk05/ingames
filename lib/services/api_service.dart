@@ -36,6 +36,15 @@ class ApiService {
   static Future<Map<String, dynamic>?> getTransactions({int page = 1, int limit = 20}) async {
     try { return (await ApiClient.get('/wallet/transactions?page=$page&limit=$limit')) as Map<String, dynamic>; } catch (_) { return null; }
   }
+  static Future<Map<String, dynamic>?> getDashboardHeader() async {
+    try {
+      final res = await ApiClient.get('/app/dashboard-header');
+      if (res is Map<String, dynamic>) return res;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
   static Future<List<dynamic>?> getBanners() async => null;
   static Future<List<dynamic>?> getBetHistory({int page = 1, int limit = 20}) async {
     try {

@@ -26,14 +26,24 @@ export const SPECIFIC_MULTICARDS = {
   12: 26
 };
 
-export const CHIP_VALUES = [10, 50, 100, 500, 1000];
+export const CHIP_VALUES = [10, 50, 100, 500, 1000, 5000];
+
+export const CHIP_SVGS = {
+  10: './assets/chips/10.svg',
+  50: './assets/chips/50.svg',
+  100: './assets/chips/100.svg',
+  500: './assets/chips/500.svg',
+  1000: './assets/chips/1K.svg',
+  5000: './assets/chips/5K.svg'
+};
 
 export const CHIP_GRADIENTS = {
   10: '#00e676',
   50: '#0288d1',
   100: '#d50000',
   500: '#aa00ff',
-  1000: '#ffd54f'
+  1000: '#ffd54f',
+  5000: '#ff1744'
 };
 
 export const ROUND_DURATION = 12; // 12 seconds per round

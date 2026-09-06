@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/api_service.dart';
 import '../theme/app_colors.dart';
 
 class TopHeader extends StatelessWidget {
@@ -16,13 +17,20 @@ class TopHeader extends StatelessWidget {
     this.username = 'Ashu K',
     this.userTag = 'Profile',
     this.balance = 1250.0,
-    this.avatarPath = 'assets/avatar/avatar_1.png',
+    this.avatarPath = '/avatars/avatar_1.png',
     required this.onAddMoneyPressed,
     required this.onProfilePressed,
   });
 
+  static String _cleanPath(String? p) {
+    if (p == null || p.isEmpty) return '/avatars/avatar_1.png';
+    return p;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cleanAvatarPath = _cleanPath(avatarPath);
+
     return Container(
       padding: const EdgeInsets.only(top: 18.0, bottom: 12.0, left: 16.0, right: 16.0),
       child: Row(
@@ -50,19 +58,7 @@ class TopHeader extends StatelessWidget {
                 ],
               ),
               child: ClipOval(
-                child: Image.asset(
-                  avatarPath,
-                  width: 60,
-                  height: 60,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Center(
-                    child: Icon(
-                      Icons.person,
-                      size: 38,
-                      color: Colors.purple.shade900,
-                    ),
-                  ),
-                ),
+                child: _buildAvatarWithCandidates(cleanAvatarPath),
               ),
             ),
           ),
@@ -156,7 +152,7 @@ class TopHeader extends StatelessWidget {
                   children: [
                     // Left Wallet Icon
                     SvgPicture.asset(
-                      'assets/nav_icon/wallet.svg',
+                      'Assets/nav_icon/wallet.svg',
                       width: 22,
                       height: 22,
                       colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
@@ -202,5 +198,55 @@ class TopHeader extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildAvatarWithCandidates(String primaryPath) {
+    if (primaryPath.startsWith('http://') || primaryPath.startsWith('https://') || primaryPath.startsWith('/')) {
+      final fullUrl = primaryPath.startsWith('/') ? '${ApiService.serverDomain}$primaryPath' : primaryPath;
+      final fileName = primaryPath.split('/').last;
+      return Image.network(
+        fullUrl,
+        width: 60,
+        height: 60,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Image.asset(
+          'Assets/Avatar/$fileName',
+          width: 60,
+          height: 60,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Image.asset(
+            'Assets/Avatar/avatar_1.png',
+            width: 60,
+            height: 60,
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
+
+    final fileName = primaryPath.split('/').last;
+    final candidates = [
+      primaryPath,
+      'Assets/Avatar/$fileName',
+      'assets/Avatar/$fileName',
+      'assets/avatar/$fileName',
+      'Assets/$fileName',
+      'Assets/Avatar/avatar_1.png',
+    ];
+
+    Widget tryCandidate(int index) {
+      if (index >= candidates.length) {
+        return Container(color: AppColors.avatarBg);
+      }
+      return Image.asset(
+        candidates[index],
+        width: 60,
+        height: 60,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => tryCandidate(index + 1),
+      );
+    }
+
+    return tryCandidate(0);
   }
 }

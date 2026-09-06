@@ -70,5 +70,6 @@ graphify-out/
 *.sqlite-wal
 backend/test_db.js
 
-
-
+# Android build artifacts
+android/build/
+casino_chips_all_svgs/

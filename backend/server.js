@@ -39,7 +39,13 @@ const PORT = process.env.PORT || 5050;
 
 app.use(cors({ origin: allowedOrigin }));
 app.use(express.json({ limit: '100kb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+  }
+}));
 
 app.use('/api', apiRoutes);
 

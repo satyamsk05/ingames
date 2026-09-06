@@ -59,22 +59,42 @@ export class Header {
     }
 
     if (btnExitMatch) {
-      btnExitMatch.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      const handleExit = (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
         soundManager.playClick();
+
+        const payload = JSON.stringify({
+          source: 'ingames-game',
+          version: 1,
+          type: 'EXIT_MATCH'
+        });
+
+        // 1. Flutter Mobile App WebView Native Channel
+        if (window.InGamesNativeBridge && typeof window.InGamesNativeBridge.postMessage === 'function') {
+          try {
+            window.InGamesNativeBridge.postMessage(payload);
+            return;
+          } catch (_) {}
+        }
+
+        // 2. Web Iframe Parent Window
         if (window.parent && window.parent !== window) {
           try {
-            window.parent.postMessage(JSON.stringify({
-              source: 'ingames-game',
-              version: 1,
-              type: 'EXIT_MATCH'
-            }), '*');
+            window.parent.postMessage(payload, '*');
+            return;
           } catch (_) {}
-        } else {
-          window.history.back();
         }
-      });
+
+        // 3. Fallback browser back
+        try {
+          window.history.back();
+        } catch (_) {}
+      };
+
+      btnExitMatch.addEventListener('click', handleExit);
     }
   }
 

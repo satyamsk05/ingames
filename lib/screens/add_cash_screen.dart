@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../features/wallet/data/wallet_api.dart';
+import '../services/dashboard_sync_manager.dart';
 
 class OfferData {
   final int amount;
@@ -28,23 +29,44 @@ class _AddCashScreenState extends State<AddCashScreen> {
   final TextEditingController _amountController = TextEditingController();
   int? _selectedOfferIndex;
 
-  final List<OfferData> _offers = const [
-    OfferData(amount: 200, cashback: 25),
-    OfferData(amount: 500, cashback: 75),
-    OfferData(amount: 50, cashback: 4),
-    OfferData(amount: 100, cashback: 10),
-  ];
+  List<OfferData> get _offers {
+    final data = DashboardSyncManager.dashboardData.value;
+    final offersRaw = data['addCashOffers'];
+    if (offersRaw is List && offersRaw.isNotEmpty) {
+      final List<OfferData> parsed = [];
+      for (var o in offersRaw) {
+        if (o is Map) {
+          final amt = (o['amount'] as num?)?.toInt() ?? 0;
+          final cb = (o['cashback'] as num?)?.toInt() ?? 0;
+          parsed.add(OfferData(amount: amt, cashback: cb));
+        }
+      }
+      if (parsed.isNotEmpty) return parsed;
+    }
+    return const [
+      OfferData(amount: 200, cashback: 25),
+      OfferData(amount: 500, cashback: 75),
+      OfferData(amount: 50, cashback: 4),
+      OfferData(amount: 100, cashback: 10),
+    ];
+  }
 
   @override
   void initState() {
     super.initState();
+    DashboardSyncManager.dashboardData.addListener(_onSyncDataChanged);
     _amountController.addListener(() {
       if (mounted) setState(() {});
     });
   }
 
+  void _onSyncDataChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    DashboardSyncManager.dashboardData.removeListener(_onSyncDataChanged);
     _amountController.dispose();
     super.dispose();
   }
@@ -392,7 +414,7 @@ class _AddCashScreenState extends State<AddCashScreen> {
                       ),
                       const SizedBox(width: 4),
                       SvgPicture.asset(
-                        'assets/nav_icon/wallet.svg',
+                        'Assets/nav_icon/wallet.svg',
                         width: 16,
                         height: 16,
                         colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),

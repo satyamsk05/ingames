@@ -30,6 +30,7 @@ import 'screens/login_screen.dart';
 import 'screens/html5_game_screen.dart';
 import 'services/api_service.dart';
 import 'services/supabase_service.dart';
+import 'services/dashboard_sync_manager.dart';
 import 'core/storage/token_manager.dart';
 import 'features/wallet/data/wallet_api.dart';
 import 'widgets/network_error_widget.dart';
@@ -100,7 +101,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
   final double _rewardsBalance = 0.0;
   String _userName = 'Player';
   String _phoneNumber = '';
-  String _currentAvatarPath = 'assets/avatar/avatar_1.png';
+  String _currentAvatarPath = 'Assets/Avatar/avatar_1.png';
   bool _isProfilePageActive = false;
   bool _isWithdrawPageActive = false;
   bool _isSettingsPageActive = false;
@@ -122,6 +123,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
   @override
   void initState() {
     super.initState();
+    DashboardSyncManager.init();
     if (_isLoggedIn) {
       _fetchUserData();
     }
@@ -172,6 +174,9 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
           }
           if (profile['phoneNumber'] != null) {
             _phoneNumber = profile['phoneNumber'].toString();
+          }
+          if (profile['avatarPath'] != null && profile['avatarPath'].toString().isNotEmpty) {
+            _currentAvatarPath = ProfileScreen.normalizeAvatarPath(profile['avatarPath'].toString());
           }
         });
       }
@@ -259,6 +264,9 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
               if (user['username'] != null) {
                 _userName = user['username'].toString();
               }
+              if (user['avatarPath'] != null && user['avatarPath'].toString().isNotEmpty) {
+                _currentAvatarPath = ProfileScreen.normalizeAvatarPath(user['avatarPath'].toString());
+              }
             }
           });
           _fetchUserData();
@@ -302,30 +310,46 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
                 !_isHtml5GameActive)
               SafeArea(
                 bottom: false,
-                child: Column(
-                  children: [
-                    TopHeader(
-                      username: _userName,
-                      userTag: 'Profile',
-                      balance: _totalBalance,
-                      avatarPath: _currentAvatarPath,
-                      onAddMoneyPressed: () {
-                        setState(() {
-                          _isProfilePageActive = false;
-                          _currentNavIndex = 2;
-                        });
-                      },
-                      onProfilePressed: () {
-                        setState(() {
-                          _isProfilePageActive = true;
-                        });
-                      },
-                    ),
-                    const OnlineTicker(
-                      onlineCount: '89,156 online',
-                    ),
-                    const SizedBox(height: 4),
-                  ],
+                child: ValueListenableBuilder<Map<String, dynamic>>(
+                  valueListenable: DashboardSyncManager.dashboardData,
+                  builder: (context, data, child) {
+                    final profileMap = data['profile'] as Map<String, dynamic>? ?? {};
+                    final onlineMap = data['onlinePlayers'] as Map<String, dynamic>? ?? {};
+
+                    final name = (profileMap['username'] != null && profileMap['username'].toString().isNotEmpty)
+                        ? profileMap['username'].toString()
+                        : _userName;
+                    final bal = (profileMap['balance'] as num?)?.toDouble() ?? _totalBalance;
+                    final av = (profileMap['avatarUrl'] != null && profileMap['avatarUrl'].toString().isNotEmpty)
+                        ? profileMap['avatarUrl'].toString()
+                        : _currentAvatarPath;
+                    final countVal = onlineMap['totalOnline'];
+
+                    return Column(
+                      children: [
+                        TopHeader(
+                          username: name,
+                          userTag: 'Profile',
+                          balance: bal,
+                          avatarPath: av,
+                          onAddMoneyPressed: () {
+                            setState(() {
+                              _isProfilePageActive = true;
+                            });
+                          },
+                          onProfilePressed: () {
+                            setState(() {
+                              _isProfilePageActive = true;
+                            });
+                          },
+                        ),
+                        OnlineTicker(
+                          onlineCount: countVal != null ? '$countVal online' : '89,156 online',
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                    );
+                  },
                 ),
               ),
 
@@ -406,10 +430,9 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
                                           onAddCashTap: () {
                                             setState(() {
                                               _isSettingsPageActive = false;
-                                              _isProfilePageActive = false;
                                               _isWithdrawPageActive = false;
                                               _isTransactionsPageActive = false;
-                                              _currentNavIndex = 2;
+                                              _isProfilePageActive = true;
                                             });
                                           },
                                           onTransactionHistoryTap: () {
@@ -483,6 +506,11 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
                                   setState(() {
                                     _isProfilePageActive = false;
                                     _currentNavIndex = 2;
+                                  });
+                                },
+                                onContactSupportTap: () {
+                                  setState(() {
+                                    _isHelpCentrePageActive = true;
                                   });
                                 },
                                 onAvatarChanged: (newPath) async {
@@ -656,6 +684,35 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
     });
   }
 
+  void _showComingSoon(String gameTitle) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.rocket_launch_rounded, color: Color(0xFFFFC107), size: 20),
+            const SizedBox(width: 10),
+            Text(
+              '$gameTitle - Coming Soon! 🚀',
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF260435),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Color(0xFFFFC107), width: 1.5),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   Widget _buildHomeTab() {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -669,103 +726,81 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
               });
             },
           ),
-          const SizedBox(height: 8),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 195,
-            child: ListView(
-              clipBehavior: Clip.none,
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.only(top: 10, left: 16.0, right: 16.0, bottom: 5),
-              children: [
-                GameCard(
-                  data: const GameCardData(
-                    title: 'Classic Dice',
-                    category: 'Dice • HOT 🔥',
-                    imagePath: 'Assets/images/classic_dice.png',
-                    playersOnline: '4,520 playing',
-                    accentColor: Color(0xFF00E676),
+          const SizedBox(height: 18),
+          ValueListenableBuilder<Map<String, dynamic>>(
+            valueListenable: DashboardSyncManager.dashboardData,
+            builder: (context, data, child) {
+              final gamesListRaw = data['games'] as List<dynamic>? ?? [];
+
+              if (gamesListRaw.isEmpty) {
+                return SizedBox(
+                  height: 260,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: 3,
+                    itemBuilder: (ctx, i) => const GameCard(
+                      data: GameCardData(
+                        title: '',
+                        imagePath: '',
+                      ),
+                      onTap: _noop,
+                      isLoading: true,
+                    ),
                   ),
-                  onTap: () => _launchHtml5Game('Classic Dice', 10.0, 20.0, '/games/seven_up_down/index.html'),
+                );
+              }
+
+              return SizedBox(
+                height: 270,
+                child: ListView.builder(
+                  clipBehavior: Clip.none,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(left: 16.0, right: 16.0, bottom: 5),
+                  itemCount: gamesListRaw.length,
+                  itemBuilder: (ctx, index) {
+                    final gameObj = gamesListRaw[index] as Map<String, dynamic>? ?? {};
+                    final title = gameObj['title']?.toString() ?? 'Game';
+                    final imagePath = gameObj['imagePath']?.toString() ?? 'Assets/images/classic_dice.png';
+                    final gameUrl = gameObj['gameUrl']?.toString() ?? '/games/seven_up_down/index.html';
+                    final isAvailable = gameObj['isAvailable'] == true;
+
+                    Color accentColor = const Color(0xFF00E676);
+                    if (gameObj['accentColor'] != null) {
+                      final hex = gameObj['accentColor'].toString().replaceAll('#', '');
+                      if (hex.length == 6) {
+                        accentColor = Color(int.parse('FF$hex', radix: 16));
+                      }
+                    }
+
+                    return GameCard(
+                      data: GameCardData(
+                        id: gameObj['id']?.toString() ?? '',
+                        title: title,
+                        imagePath: imagePath,
+                        accentColor: accentColor,
+                        gameUrl: gameUrl,
+                      ),
+                      onTap: () {
+                        if (isAvailable || gameObj['id'] == 'classic_dice' || gameObj['id'] == '7updown') {
+                          _launchHtml5Game(title, 10.0, 20.0, gameUrl);
+                        } else {
+                          _showComingSoon(title);
+                        }
+                      },
+                    );
+                  },
                 ),
-                GameCard(
-                  data: const GameCardData(
-                    title: 'Double',
-                    category: 'Multiplier • POPULAR 💎',
-                    imagePath: 'Assets/images/double.png',
-                    playersOnline: '3,890 playing',
-                    accentColor: Color(0xFFAA00FF),
-                  ),
-                  onTap: () => _launchHtml5Game('Double', 20.0, 100.0, '/games/seven_up_down/index.html'),
-                ),
-                GameCard(
-                  data: const GameCardData(
-                    title: 'Mines',
-                    category: 'Arcade • NEW 💥',
-                    imagePath: 'Assets/images/mines.png',
-                    playersOnline: '6,240 playing',
-                    accentColor: Color(0xFFFFD54F),
-                  ),
-                  onTap: () => _launchHtml5Game('Mines', 10.0, 50.0, '/games/seven_up_down/index.html'),
-                ),
-                GameCard(
-                  data: const GameCardData(
-                    title: 'Dragon Vs Tiger',
-                    category: 'Cards • NEW 🚀',
-                    imagePath: 'Assets/images/dtgame.png',
-                    playersOnline: '3,120 playing',
-                    accentColor: Color(0xFFFF1744),
-                  ),
-                  onTap: () => _launchHtml5Game('Dragon Vs Tiger', 10.0, 20.0, '/games/seven_up_down/index.html'),
-                ),
-                GameCard(
-                  data: const GameCardData(
-                    title: 'Fruit Slice Ninja',
-                    category: 'Arcade • HTML5',
-                    imagePath: 'Assets/images/promo.jpg',
-                    playersOnline: '1,420 playing',
-                    accentColor: Color(0xFF00E676),
-                  ),
-                  onTap: () => _launchHtml5Game('Fruit Slice Ninja', 10.0, 18.0, '/games/fruit_slice/index.html'),
-                ),
-                GameCard(
-                  data: const GameCardData(
-                    title: 'Ludo Express',
-                    category: 'Board • HTML5',
-                    imagePath: 'Assets/images/ludo.jpg',
-                    playersOnline: '3,890 playing',
-                    accentColor: Color(0xFFFFB300),
-                  ),
-                  onTap: () => _launchHtml5Game('Ludo Express', 20.0, 36.0, '/games/fruit_slice/index.html'),
-                ),
-                GameCard(
-                  data: const GameCardData(
-                    title: 'Call Break Pro',
-                    category: 'Cards • HTML5',
-                    imagePath: 'Assets/images/rummy.jpg',
-                    playersOnline: '890 playing',
-                    accentColor: Color(0xFFE040FB),
-                  ),
-                  onTap: () => _launchHtml5Game('Call Break Pro', 50.0, 90.0, '/games/fruit_slice/index.html'),
-                ),
-                GameCard(
-                  data: const GameCardData(
-                    title: 'Carrom Clash',
-                    category: 'Board • HTML5',
-                    imagePath: 'Assets/images/dtgame.png',
-                    playersOnline: '2,150 playing',
-                    accentColor: Color(0xFF00B0FF),
-                  ),
-                  onTap: () => _launchHtml5Game('Carrom Clash', 15.0, 27.0, '/games/fruit_slice/index.html'),
-                ),
-              ],
-            ),
+              );
+            },
           ),
           const SizedBox(height: 20),
         ],
       ),
     );
   }
+
+  static void _noop() {}
 
 
 }

@@ -1,88 +1,156 @@
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../services/api_service.dart';
+import 'shimmer_loading.dart';
 
 class GameCardData {
+  final String id;
   final String title;
-  final String category;
   final String imagePath;
-  final String playersOnline;
   final Color accentColor;
+  final String gameUrl;
 
   const GameCardData({
+    this.id = '',
     required this.title,
-    required this.category,
     required this.imagePath,
-    required this.playersOnline,
     this.accentColor = Colors.amber,
+    this.gameUrl = '/games/seven_up_down/index.html',
   });
 }
 
 class GameCard extends StatelessWidget {
   final GameCardData data;
   final VoidCallback onTap;
+  final bool isLoading;
 
   const GameCard({
     super.key,
     required this.data,
     required this.onTap,
+    this.isLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(right: 16.0),
+        child: ShimmerBox(
+          width: 260,
+          height: 260,
+          borderRadius: 18.0,
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // Game Card Image Container
-          Container(
-            width: 175,
-            height: 175,
-            margin: const EdgeInsets.only(right: 16.0),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(15.0),
-              border: Border.all(
-                color: AppColors.cardBorder,
-                width: 3.0,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.purple.shade900.withValues(alpha: 0.5),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+      child: Container(
+        width: 260,
+        height: 260,
+        margin: const EdgeInsets.only(right: 16.0),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18.0),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.purple.shade900.withValues(alpha: 0.4),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12.0),
-              child: Image.asset(
-                data.imagePath,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  final altPath = data.imagePath.startsWith('assets/')
-                      ? data.imagePath.replaceFirst('assets/', 'Assets/')
-                      : data.imagePath.replaceFirst('Assets/', 'assets/');
-                  return Image.asset(
-                    altPath,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.purple.shade900,
-                        child: Center(
-                          child: Icon(
-                            Icons.sports_esports_rounded,
-                            size: 60,
-                            color: data.accentColor,
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18.0),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Main Game Poster Image with Multi-Path Resolution
+              _buildImageWithFallbacks(data.imagePath),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageWithFallbacks(String primaryPath) {
+    if (primaryPath.startsWith('http://') || primaryPath.startsWith('https://') || primaryPath.startsWith('/')) {
+      final fullUrl = primaryPath.startsWith('/') ? '${ApiService.serverDomain}$primaryPath' : primaryPath;
+      return Image.network(
+        fullUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildFallbackCardGraphic(),
+      );
+    }
+
+    final fileName = primaryPath.split('/').last;
+    final candidatePaths = [
+      primaryPath,
+      'Assets/images/$fileName',
+      'assets/images/$fileName',
+      'Assets/$fileName',
+      'assets/$fileName',
+    ];
+
+    Widget buildCandidate(int index) {
+      if (index >= candidatePaths.length) {
+        return _buildFallbackCardGraphic();
+      }
+      return Image.asset(
+        candidatePaths[index],
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return buildCandidate(index + 1);
+        },
+      );
+    }
+
+    return buildCandidate(0);
+  }
+
+  Widget _buildFallbackCardGraphic() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF4A1068),
+            data.accentColor.withValues(alpha: 0.35),
+            const Color(0xFF1F0430),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.1),
+                border: Border.all(color: data.accentColor, width: 2),
+              ),
+              child: Icon(
+                Icons.sports_esports_rounded,
+                size: 52,
+                color: data.accentColor,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              data.title,
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
