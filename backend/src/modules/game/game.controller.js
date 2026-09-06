@@ -5,14 +5,36 @@ const SevenUpDownService = require('./seven_up_down.service');
 const activeGames = [
   {
     id: 'game_7_up_down',
-    title: '7 Up Down (Dice)',
+    title: 'Classic Dice',
     category: 'Dice',
     entryFee: 10.0,
     prizePool: 20.0,
-    icon: 'assets/nav_icon/nav_game.png',
+    icon: 'Assets/images/classic_dice.png',
     gameUrl: '/games/seven_up_down/index.html',
     badge: 'HOT 🔥',
     activePlayers: 4520,
+  },
+  {
+    id: 'game_double',
+    title: 'Double',
+    category: 'Multiplier',
+    entryFee: 20.0,
+    prizePool: 100.0,
+    icon: 'Assets/images/double.png',
+    gameUrl: '/games/seven_up_down/index.html',
+    badge: 'POPULAR 💎',
+    activePlayers: 3890,
+  },
+  {
+    id: 'game_mines',
+    title: 'Mines',
+    category: 'Arcade',
+    entryFee: 10.0,
+    prizePool: 50.0,
+    icon: 'Assets/images/mines.png',
+    gameUrl: '/games/seven_up_down/index.html',
+    badge: 'NEW 💥',
+    activePlayers: 6240,
   },
 ];
 
@@ -27,6 +49,7 @@ class GameController {
     const closeAt = new Date(round.betting_close_at);
     const remainingMs = Math.max(0, closeAt.getTime() - now.getTime());
     const timeRemainingSeconds = Math.floor(remainingMs / 1000);
+    const recentHistory = SevenUpDownService.getRecentHistory(50);
 
     return ApiResponse.success(res, {
       roundId: round.id,
@@ -39,6 +62,7 @@ class GameController {
       bettingOpenAt: round.betting_open_at,
       bettingCloseAt: round.betting_close_at,
       serverSeed: round.status === 'FINISHED' ? round.server_seed : null,
+      recentHistory,
     });
   }
 

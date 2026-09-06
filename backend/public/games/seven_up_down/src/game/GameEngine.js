@@ -57,6 +57,18 @@ class GameEngine {
   handleRoundCreated(round) {
     if (!round || !round.roundId) return;
     this.currentRoundId = round.roundId;
+
+    if (round.recentHistory && Array.isArray(round.recentHistory) && round.recentHistory.length > 0) {
+      gameState.setHistory(round.recentHistory);
+    }
+
+    if (round.status === 'BETTING_CLOSED' || round.status === 'RESULT_GENERATED' || (round.timeRemainingSeconds !== undefined && round.timeRemainingSeconds <= 0)) {
+      gameState.isRolling = true;
+      timerManager.stopTimer();
+      eventBus.emit('DICE_ROLL_START');
+      return;
+    }
+
     gameState.isRolling = false;
     gameState.resetRoundBets();
 

@@ -11,10 +11,14 @@ export class Timer {
   init() {
     eventBus.on('TIMER_TICK', ({ timeLeft, max }) => {
       if (this.timerTextEl) {
-        this.timerTextEl.innerText = timeLeft;
+        if (timeLeft <= 0) {
+          this.timerTextEl.innerText = '🎲';
+        } else {
+          this.timerTextEl.innerText = timeLeft;
+        }
       }
       if (this.timerProgressEl) {
-        const offset = this.circleMaxOffset - (timeLeft / max) * this.circleMaxOffset;
+        const offset = max > 0 ? (this.circleMaxOffset - (timeLeft / max) * this.circleMaxOffset) : this.circleMaxOffset;
         this.timerProgressEl.style.strokeDashoffset = offset;
       }
     });

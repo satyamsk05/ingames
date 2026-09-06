@@ -28,35 +28,63 @@ class SevenUpDownService {
   }
 
   /**
+   * Get recent finished round history (last N results)
+   */
+  static getRecentHistory(limit = 50) {
+    try {
+      const rows = db.prepare(`
+        SELECT result_sum FROM game_rounds
+        WHERE game_id = 'game_7_up_down' AND status = 'FINISHED' AND result_sum IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT ?
+      `).all(limit);
+      return rows.map(r => r.result_sum);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /**
    * Get active/current game round with automatic timer scheduling
    */
   static getCurrentRound() {
-    const now = new Date().toISOString();
     const dbRound = db.prepare(`
       SELECT * FROM game_rounds 
-      WHERE game_id = 'game_7_up_down' AND status = 'BETTING_OPEN' AND betting_close_at > ?
+      WHERE game_id = 'game_7_up_down' AND status IN ('BETTING_OPEN', 'BETTING_CLOSED', 'RESULT_GENERATED')
       ORDER BY created_at DESC LIMIT 1
-    `).get(now);
+    `).get();
 
     if (dbRound) {
-      this.currentRound = dbRound;
       const closeAt = new Date(dbRound.betting_close_at).getTime();
       const remainingMs = closeAt - Date.now();
-      if (remainingMs > 0) {
-        clearTimeout(this.roundTimer);
-        this.roundTimer = setTimeout(() => this.closeBettingAndRoll(dbRound.id), remainingMs);
+
+      if (dbRound.status === 'BETTING_OPEN') {
+        if (remainingMs > 0) {
+          if (!this.currentRound || this.currentRound.id !== dbRound.id || !this.roundTimer) {
+            this.currentRound = dbRound;
+            clearTimeout(this.roundTimer);
+            this.roundTimer = setTimeout(() => this.closeBettingAndRoll(dbRound.id), remainingMs);
+          }
+        } else {
+          this.closeBettingAndRoll(dbRound.id);
+        }
       } else {
-        this.closeBettingAndRoll(dbRound.id);
+        if (remainingMs < -10000) {
+          db.prepare(`UPDATE game_rounds SET status = 'FINISHED' WHERE id = ?`).run(dbRound.id);
+          return this.createNewRound();
+        }
+        this.currentRound = dbRound;
       }
-    } else {
-      // Mark old stuck rounds as finished before creating a clean round
-      db.prepare(`
-        UPDATE game_rounds 
-        SET status = 'FINISHED' 
-        WHERE game_id = 'game_7_up_down' AND status IN ('BETTING_OPEN', 'BETTING_CLOSED', 'RESULT_GENERATED') AND betting_close_at <= ?
-      `).run(now);
-      this.currentRound = this.createNewRound();
+      return this.currentRound;
     }
+
+    // Mark old stuck rounds as finished before creating a clean round
+    db.prepare(`
+      UPDATE game_rounds 
+      SET status = 'FINISHED' 
+      WHERE game_id = 'game_7_up_down' AND status IN ('BETTING_OPEN', 'BETTING_CLOSED', 'RESULT_GENERATED')
+    `).run();
+    this.currentRound = this.createNewRound();
     return this.currentRound;
   }
 
@@ -94,6 +122,7 @@ class SevenUpDownService {
         fairnessVersion: 1,
         bettingCloseAt: round.betting_close_at,
         timeRemainingSeconds: 15,
+        recentHistory: this.getRecentHistory(50),
       });
     }
 

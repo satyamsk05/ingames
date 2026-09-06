@@ -15,6 +15,7 @@ router.post('/auth/auth0', AuthController.auth0Auth);
 
 // --- User Profile & Wallet Routes (Strict Auth Required) ---
 router.get('/user/profile', authMiddleware, WalletController.getProfileAndWallet);
+router.put('/user/profile', authMiddleware, AuthController.updateProfile);
 router.post('/wallet/deposits/orders', authMiddleware, WalletController.createDepositOrder);
 router.post('/wallet/add-cash', authMiddleware, WalletController.createDepositOrder); // Legacy alias
 router.post('/wallet/deposits/webhook', WalletController.depositWebhook); // Webhook callback

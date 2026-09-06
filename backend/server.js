@@ -85,6 +85,7 @@ io.on('connection', (socket) => {
     if (currentRound) {
       const closeAt = new Date(currentRound.betting_close_at).getTime();
       const timeRemainingSeconds = Math.max(0, Math.floor((closeAt - Date.now()) / 1000));
+      const recentHistory = SevenUpDownService.getRecentHistory(50);
       socket.emit('ROUND_CREATED', {
         roundId: currentRound.id,
         roundNumber: currentRound.round_number,
@@ -92,6 +93,7 @@ io.on('connection', (socket) => {
         fairnessVersion: 1,
         bettingCloseAt: currentRound.betting_close_at,
         timeRemainingSeconds,
+        recentHistory,
       });
     }
   } catch (_) {}

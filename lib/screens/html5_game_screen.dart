@@ -90,11 +90,18 @@ class _Html5GameScreenState extends State<Html5GameScreen> with WidgetsBindingOb
                 setState(() {
                   _isLoading = false;
                 });
+                try {
+                  _webViewController?.runJavaScript("""
+                    window.IN_GAMES_AUTH_TOKEN = '$token';
+                    window.IN_GAMES_SERVER_URL = '${ApiService.baseUrl}';
+                  """);
+                } catch (_) {}
               }
             },
             onWebResourceError: (WebResourceError error) {
-              final isMainFrame = error.isForMainFrame ?? true;
-              if (mounted && isMainFrame) {
+              // Ignore subresource errors (e.g. socket reconnects or offline asset pings) so local WebView stays open
+              final isMainFrame = error.isForMainFrame ?? false;
+              if (mounted && isMainFrame && error.errorType == WebResourceErrorType.fileNotFound) {
                 setState(() {
                   _hasWebError = true;
                   _isLoading = false;
@@ -103,7 +110,32 @@ class _Html5GameScreenState extends State<Html5GameScreen> with WidgetsBindingOb
             },
           ),
         )
-        ..loadRequest(Uri.parse(formattedUrl));
+        ..addJavaScriptChannel(
+          'InGamesNativeBridge',
+          onMessageReceived: (JavaScriptMessage message) {
+            try {
+              final dynamic json = jsonDecode(message.message);
+              if (json is Map<String, dynamic>) {
+                final String type = json['type']?.toString() ?? '';
+                if (type == 'EXIT_GAME' || type == 'EXIT_MATCH') {
+                  _exitGame();
+                } else if (type == 'WALLET_UPDATED' || type == 'ROUND_RESULT') {
+                  _refreshProfileBalance();
+                }
+              }
+            } catch (_) {}
+          },
+        );
+
+      final localAssetPath = widget.gameUrl.contains('seven_up_down')
+          ? 'assets/game/seven_up_down/index.html'
+          : widget.gameUrl;
+
+      if (localAssetPath.startsWith('assets/')) {
+        _webViewController?.loadFlutterAsset(localAssetPath);
+      } else {
+        _webViewController?.loadRequest(Uri.parse(formattedUrl));
+      }
     }
   }
 

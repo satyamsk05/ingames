@@ -109,7 +109,7 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
   bool _isContactUsPageActive = false;
   bool _isFairPlayPageActive = false;
   bool _isHtml5GameActive = false;
-  String _selectedGameTitle = '7 Up Down';
+  String _selectedGameTitle = 'Classic Dice';
   double _selectedEntryFee = 10.0;
   double _selectedPrizePool = 20.0;
   String _selectedGameUrl = '/games/seven_up_down/index.html';
@@ -674,13 +674,33 @@ class _InGamesHomeScreenState extends State<InGamesHomeScreen> {
               children: [
                 GameCard(
                   data: const GameCardData(
-                    title: '7 Up Down (Dice)',
+                    title: 'Classic Dice',
                     category: 'Dice • HOT 🔥',
-                    imagePath: 'Assets/images/7updown.png',
+                    imagePath: 'Assets/images/classic_dice.png',
                     playersOnline: '4,520 playing',
                     accentColor: Color(0xFF00E676),
                   ),
-                  onTap: () => _launchHtml5Game('7 Up Down (Dice)', 10.0, 20.0, '/games/seven_up_down/index.html'),
+                  onTap: () => _launchHtml5Game('Classic Dice', 10.0, 20.0, '/games/seven_up_down/index.html'),
+                ),
+                GameCard(
+                  data: const GameCardData(
+                    title: 'Double',
+                    category: 'Multiplier • POPULAR 💎',
+                    imagePath: 'Assets/images/double.png',
+                    playersOnline: '3,890 playing',
+                    accentColor: Color(0xFFAA00FF),
+                  ),
+                  onTap: () => _launchHtml5Game('Double', 20.0, 100.0, '/games/seven_up_down/index.html'),
+                ),
+                GameCard(
+                  data: const GameCardData(
+                    title: 'Mines',
+                    category: 'Arcade • NEW 💥',
+                    imagePath: 'Assets/images/mines.png',
+                    playersOnline: '6,240 playing',
+                    accentColor: Color(0xFFFFD54F),
+                  ),
+                  onTap: () => _launchHtml5Game('Mines', 10.0, 50.0, '/games/seven_up_down/index.html'),
                 ),
                 GameCard(
                   data: const GameCardData(

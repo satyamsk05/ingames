@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>InGames - 7 Up Down Dice Game</title>
+  <!-- Google Fonts: Poppins -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Socket.IO Client Library -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    if (typeof window.io === 'undefined') {
+      var script = document.createElement('script');
+      script.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
+      document.head.appendChild(script);
+    }
+  </script>
+  <!-- CSS Stylesheet -->
+  <script type="module" crossorigin src="./assets/index-BmOPpoF1.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-rDppLS_I.css">
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- Top Header Bar (Settings Button, Game Title, LIVE status) -->
+    <div class="top-header-bar">
+      <button class="settings-btn" id="btnSettings" type="button">
+        <div class="settings-icon-circle">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+          </svg>
+        </div>
+        <span class="settings-label">Settings</span>
+      </button>
+
+      <div class="header-ping-pill" id="headerPingPill">
+        <svg class="wifi-icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 3C7.95 3 4.21 4.34 1.2 6.6L3 9c2.47-1.87 5.56-3 9-3s6.53 1.13 9 3l1.8-2.4C19.79 4.34 16.05 3 12 3zm0 6c-2.73 0-5.26.9-7.3 2.4L6.5 13.8C8.07 12.67 9.96 12 12 12s3.93.67 5.5 1.8l1.8-2.4C17.26 9.9 14.73 9 12 9zm0 6c-1.4 0-2.7.46-3.76 1.23L12 21l3.76-4.77C14.7 15.46 13.4 15 12 15z"/>
+        </svg>
+        <span id="pingValText">28ms</span>
+      </div>
+    </div>
+
+    <!-- Last 100 Rounds Ribbon -->
+    <div class="history-card">
+      <div class="history-header">
+        <span>Last 100 Rounds</span>
+        <div class="legend-row">
+          <div class="dot-item"><div class="dot dot-red"></div>2-6</div>
+          <div class="dot-item"><div class="dot dot-blue"></div>7</div>
+          <div class="dot-item"><div class="dot dot-green"></div>8-12</div>
+        </div>
+      </div>
+      <div class="history-ribbon" id="historyRibbon">
+        <!-- Injected by HistoryPanel UI Component -->
+      </div>
+    </div>
+
+    <!-- Center Stage & Active Players -->
+    <div class="stage-row">
+      <div class="players-col" id="playersCol">
+        <!-- Injected by PlayersPanel UI Component -->
+      </div>
+
+      <!-- Glass Dome Roller -->
+      <div class="glass-dome-wrap">
+        <div class="dome-pedestal">
+          <div class="glass-cover"></div>
+          <div class="dice-cube" id="dice1">4</div>
+          <div class="dice-cube" id="dice2">3</div>
+        </div>
+      </div>
+
+      <!-- Timer Ring -->
+      <div class="timer-ring-wrap">
+        <svg class="timer-svg" viewBox="0 0 68 68">
+          <circle class="timer-circle-bg" cx="34" cy="34" r="30"></circle>
+          <circle class="timer-circle-progress" id="timerProgress" cx="34" cy="34" r="30"></circle>
+        </svg>
+        <div class="timer-text-val" id="timerText">12</div>
+      </div>
+    </div>
+
+    <!-- Middle Control Bar -->
+    <div class="mid-control-bar">
+      <div class="pill-info">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+        </svg>
+        <span>32</span>
+      </div>
+      <div class="pill-total-bet">
+        <span class="total-bet-title">Total Table Bet Amount</span>
+        <span class="total-bet-val" id="totalTableBetVal">₹0.00</span>
+      </div>
+    </div>
+
+    <!-- 3 Main Bet Cards (2-6 DOWN, 7, 8-12 UP) -->
+    <div class="main-bets-grid" id="mainBetsGrid">
+      <!-- 2 - 6 DOWN -->
+      <div class="bet-card card-down" id="btnBetDown">
+        <div class="bet-badge" id="badgeDown">₹0</div>
+        <div class="card-title-lg">2 - 6</div>
+        <div class="card-odds">1 : 1</div>
+        <div class="card-subtext">DOWN</div>
+      </div>
+
+      <!-- 7 -->
+      <div class="bet-card card-seven" id="btnBetSeven">
+        <div class="bet-badge" id="badgeSeven">₹0</div>
+        <div class="card-title-lg">7</div>
+        <div class="card-odds">1 : 4</div>
+        <div class="card-subtext">LUCKY</div>
+      </div>
+
+      <!-- 8 - 12 UP -->
+      <div class="bet-card card-up" id="btnBetUp">
+        <div class="bet-badge" id="badgeUp">₹0</div>
+        <div class="card-title-lg">8 - 12</div>
+        <div class="card-odds">1 : 1</div>
+        <div class="card-subtext">UP</div>
+      </div>
+    </div>
+
+    <!-- Specific Number Bets (2 to 12) -->
+    <div class="num-bets-wrap" id="numBetsWrap">
+      <div class="num-row">
+        <div class="num-card" data-num="2" data-odds="26">
+          <div class="bet-badge" id="badgeNum2">₹0</div>
+          <span class="num-val num-red">2</span>
+          <span class="num-odds">1:26</span>
+        </div>
+        <div class="num-card" data-num="3" data-odds="12">
+          <div class="bet-badge" id="badgeNum3">₹0</div>
+          <span class="num-val num-red">3</span>
+          <span class="num-odds">1:12</span>
+        </div>
+        <div class="num-card" data-num="4" data-odds="8">
+          <div class="bet-badge" id="badgeNum4">₹0</div>
+          <span class="num-val num-red">4</span>
+          <span class="num-odds">1:8</span>
+        </div>
+        <div class="num-card" data-num="5" data-odds="6">
+          <div class="bet-badge" id="badgeNum5">₹0</div>
+          <span class="num-val num-red">5</span>
+          <span class="num-odds">1:6</span>
+        </div>
+        <div class="num-card" data-num="6" data-odds="5">
+          <div class="bet-badge" id="badgeNum6">₹0</div>
+          <span class="num-val num-red">6</span>
+          <span class="num-odds">1:5</span>
+        </div>
+      </div>
+
+      <div class="num-row">
+        <div class="num-card" data-num="8" data-odds="5">
+          <div class="bet-badge" id="badgeNum8">₹0</div>
+          <span class="num-val num-green">8</span>
+          <span class="num-odds">1:5</span>
+        </div>
+        <div class="num-card" data-num="9" data-odds="6">
+          <div class="bet-badge" id="badgeNum9">₹0</div>
+          <span class="num-val num-green">9</span>
+          <span class="num-odds">1:6</span>
+        </div>
+        <div class="num-card" data-num="10" data-odds="8">
+          <div class="bet-badge" id="badgeNum10">₹0</div>
+          <span class="num-val num-green">10</span>
+          <span class="num-odds">1:8</span>
+        </div>
+        <div class="num-card" data-num="11" data-odds="12">
+          <div class="bet-badge" id="badgeNum11">₹0</div>
+          <span class="num-val num-green">11</span>
+          <span class="num-odds">1:12</span>
+        </div>
+        <div class="num-card" data-num="12" data-odds="26">
+          <div class="bet-badge" id="badgeNum12">₹0</div>
+          <span class="num-val num-green">12</span>
+          <span class="num-odds">1:26</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RADIAL ARC CHIP SELECTOR POPUP -->
+    <div class="radial-chips-popup" id="chipRadialPopup">
+      <div class="pop-chip pop-10" data-val="10">10</div>
+      <div class="pop-chip pop-50" data-val="50">50</div>
+      <div class="pop-chip pop-100" data-val="100">100</div>
+      <div class="pop-chip pop-500" data-val="500">500</div>
+      <div class="pop-chip pop-1000" data-val="1000">1K</div>
+    </div>
+
+    <!-- 100% MATCH 7 UP DOWN BOTTOM CONTROL BAR -->
+    <div class="bottom-bar">
+      <!-- Left User Info & Balance -->
+      <div class="user-profile-left">
+        <img src="/assets/avatar/avatar_1.png" class="user-avatar-circle" onerror="this.src='/Assets/Avatar/avatar_1.png'" />
+        <div class="user-text-col">
+          <span class="user-id-txt" id="userNameText">Player</span>
+          <div class="balance-header-row" style="margin-top: 2px;">
+            <span>Balance</span>
+            <span class="balance-green" id="userBalanceText">₹0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Green Arch & Prominent 3D Chip -->
+      <div class="chip-center-wrap">
+        <div class="chip-arch-tab" id="mainChipBtn">
+          <div class="main-3d-chip" id="mainChipFace">10</div>
+        </div>
+      </div>
+
+      <!-- Right Action Section & Your Bet -->
+      <div class="right-action-section">
+        <div class="your-bet-row">
+          <span>Your Bet</span>
+          <span class="your-bet-green" id="yourBetText">₹0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Win Toast -->
+    <div class="win-toast" id="winToast">
+      🎉 YOU WON ₹0!
+    </div>
+
+    <!-- Game Settings Modal Sheet Overlay -->
+    <div class="settings-modal-overlay" id="settingsModal">
+      <div class="settings-modal-card">
+        <div class="modal-handle"></div>
+
+        <div class="modal-header-row">
+          <div class="modal-title-wrap">
+            <div class="modal-settings-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#A78BFA">
+                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+              </svg>
+            </div>
+            <span class="modal-title-text">Game Settings</span>
+          </div>
+          <button class="modal-close-icon-btn" id="btnCloseSettings" type="button">✕</button>
+        </div>
+
+        <!-- Sound Toggle Box -->
+        <div class="setting-item-box">
+          <div class="setting-item-left">
+            <div class="setting-icon-box" id="soundIconBox">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="#00E676">
+                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+              </svg>
+            </div>
+            <div class="setting-item-text">
+              <div class="setting-item-name">Sound Effects</div>
+              <div class="setting-item-sub" id="soundStatusText">Sound is Enabled</div>
+            </div>
+          </div>
+          <label class="switch-toggle-btn">
+            <input type="checkbox" id="toggleSoundInput" checked>
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+
+
+        <!-- EXIT MATCH Danger Button -->
+        <button class="btn-exit-match-danger" id="btnExitMatch" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+          </svg>
+          <span>EXIT MATCH</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Entry Script (ES6 Module) -->
+</body>
+</html>

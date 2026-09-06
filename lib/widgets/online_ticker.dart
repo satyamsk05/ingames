@@ -144,15 +144,20 @@ class _OnlineTickerState extends State<OnlineTicker>
   Widget build(BuildContext context) {
     final formattedCount = _formatCount(_currentCount);
 
-    return Container(
-      width: double.infinity,
-      height: 38,
-      decoration: const BoxDecoration(
-        gradient: AppColors.tickerGradient,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+        decoration: BoxDecoration(
+          color: const Color(0xFF38084A).withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF8E24AA).withValues(alpha: 0.35),
+            width: 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Stacked Overlapping Mini Player Avatars with Dynamic Motion
           SizedBox(
@@ -222,6 +227,7 @@ class _OnlineTickerState extends State<OnlineTicker>
           ),
         ],
       ),
+    ),
     );
   }
 }

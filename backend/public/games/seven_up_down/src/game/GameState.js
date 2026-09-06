@@ -69,6 +69,13 @@ class GameState {
     eventBus.emit('BETS_UPDATED', { bets: this.bets, totalBet: this.totalBet });
   }
 
+  setHistory(historyArray) {
+    if (Array.isArray(historyArray) && historyArray.length > 0) {
+      this.history = historyArray;
+      eventBus.emit('HISTORY_UPDATED', this.history);
+    }
+  }
+
   addHistoryResult(total) {
     this.history.unshift(total);
     if (this.history.length > 100) this.history.pop();
