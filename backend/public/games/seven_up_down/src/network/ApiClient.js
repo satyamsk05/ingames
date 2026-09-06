@@ -78,13 +78,23 @@ class ApiClient {
   }
 
   notifyParentWallet(balance) {
-    if (typeof window !== 'undefined' && window.parent) {
-      window.parent.postMessage({
+    if (typeof window !== 'undefined') {
+      const msg = JSON.stringify({
         source: 'ingames-game',
         version: 1,
         type: 'WALLET_UPDATED',
         balance
-      }, '*');
+      });
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(msg, '*');
+        }
+      } catch (_) {}
+      try {
+        if (window.InGamesNativeBridge && typeof window.InGamesNativeBridge.postMessage === 'function') {
+          window.InGamesNativeBridge.postMessage(msg);
+        }
+      } catch (_) {}
     }
   }
 }
