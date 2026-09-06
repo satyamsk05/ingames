@@ -55,9 +55,105 @@ class DashboardSyncManager {
     } catch (e) {
       debugPrint('DashboardSyncManager error: $e');
     } finally {
+      if (dashboardData.value.isEmpty || (dashboardData.value['games'] as List?)?.isEmpty == true) {
+        dashboardData.value = _defaultFallbackData;
+      }
       isSyncing.value = false;
     }
   }
+
+  static final Map<String, dynamic> _defaultFallbackData = {
+    'profile': {
+      'username': 'Player_0480',
+      'avatarUrl': 'Assets/Avatar/avatar_1.png',
+      'avatarFrameUrl': '/frames/golden_ring.png',
+      'ringColor': '#FFD700',
+      'balance': 0.0,
+      'phoneNumber': '7088800480',
+      'isKycVerified': true,
+      'profileTag': 'Profile',
+    },
+    'wallet': {
+      'depositBalance': 0.0,
+      'winningsBalance': 0.0,
+      'rewardsBalance': 0.0,
+      'totalBalance': 0.0,
+      'bestDeal': {'amount': 500, 'cashback': 75, 'tag': 'BEST DEAL'},
+    },
+    'addCashOffers': [
+      {'amount': 200, 'cashback': 25},
+      {'amount': 500, 'cashback': 75},
+      {'amount': 50, 'cashback': 4},
+      {'amount': 100, 'cashback': 10},
+    ],
+    'referral': {
+      'totalEarnings': 30,
+      'perReferralTarget': 1000,
+      'rewardSteps': {'signUp': 15, 'addCash': 55, 'playGames': 930},
+      'recentReferrals': [
+        {'name': 'Dh animation', 'date': '09 Dec', 'amount': '₹15', 'avatarPath': 'Assets/Avatar/avatar_1.png'},
+        {'name': 'Harshthakur', 'date': '08 Dec', 'amount': '₹15', 'avatarPath': 'Assets/Avatar/avatar_2.png'},
+        {'name': 'RAHUL', 'date': '07 Dec', 'amount': '₹15', 'avatarPath': 'Assets/Avatar/avatar_3.png'},
+      ],
+    },
+    'onlinePlayers': {
+      'totalOnline': 89156,
+      'ringColors': ['#FFD700', '#FF9800', '#4FC3F7'],
+      'avatars': [
+        'Assets/Avatar/avatar_1.png',
+        'Assets/Avatar/avatar_2.png',
+        'Assets/Avatar/avatar_3.png',
+        'Assets/Avatar/avatar_7.png',
+        'Assets/Avatar/avatar_8.png',
+        'Assets/Avatar/avatar_9.png',
+      ],
+    },
+    'banners': [
+      {
+        'id': 'deposit_bonus_180',
+        'tag': 'DEPOSIT',
+        'title': 'DEPOSIT BONUS\n180% BONUS',
+        'subtitle': 'DEPOSIT -> GET BONUS',
+        'buttonText': 'DEPOSIT NOW',
+        'imageUrl': 'Assets/banner.png',
+        'targetScreen': '/add-cash',
+      },
+    ],
+    'games': [
+      {
+        'id': 'classic_dice',
+        'title': 'Classic Dice',
+        'imagePath': 'Assets/images/classic_dice.png',
+        'accentColor': '#00E676',
+        'gameUrl': '/games/seven_up_down/index.html',
+        'isAvailable': true,
+      },
+      {
+        'id': 'double',
+        'title': 'Double',
+        'imagePath': 'Assets/images/double.png',
+        'accentColor': '#FFD700',
+        'gameUrl': '/games/seven_up_down/index.html',
+        'isAvailable': false,
+      },
+      {
+        'id': '7updown',
+        'title': '7 Up Down',
+        'imagePath': 'Assets/images/7updown.png',
+        'accentColor': '#FF4081',
+        'gameUrl': '/games/seven_up_down/index.html',
+        'isAvailable': true,
+      },
+      {
+        'id': 'mines',
+        'title': 'Mines',
+        'imagePath': 'Assets/images/mines.png',
+        'accentColor': '#7C4DFF',
+        'gameUrl': '/games/seven_up_down/index.html',
+        'isAvailable': false,
+      },
+    ],
+  };
 
   static void updateLocalBalance(double newBalance) {
     try {
