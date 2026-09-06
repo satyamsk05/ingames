@@ -23,7 +23,7 @@ class LedgerService {
       const walletId = 'wlt_' + crypto.randomUUID().slice(0, 12);
       db.prepare(`
         INSERT INTO wallets (id, user_id, cash_balance_paise, winnings_balance_paise, bonus_balance_paise, locked_balance_paise, currency, version, created_at, updated_at)
-        VALUES (?, ?, 0, 0, 0, 0, 'INR', 1, ?, ?)
+        VALUES (?, ?, 50000, 0, 0, 0, 'INR', 1, ?, ?)
       `).run(walletId, userId, now, now);
 
       wallet = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(userId);
